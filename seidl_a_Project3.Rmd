@@ -1,0 +1,1928 @@
+---
+  title: "QS Data Science Bootcamp Project 3 Instructions"
+author: "Jonathan Fowler"
+date: "6/8/2020"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+For this project, you will continue your role as a developer on the business intelligence team from the previous project. You are to choose one question from Part 1 and one question from Part 2; you are also to complete all questions in Part 3. You will place your write-up, code, and results in a new R Markdown document.
+
+I want to give an overview of the whole project before launching into the code.
+
+The first thing I did was to clean the data as much as possible and visualize some of it before answering any questions.  I attempted to answer all of the questions in multiple ways, but settled on writing my own question for Part 1 and Part 2.  The attempts on the other questions have been included in a separate attachment, not for grading.
+
+
+Part 1:
+
+The question I attempted to answer for part 1 was whether it was possible to predict the duration of a session from the moment a user logged on, knowing that user's userid, job, work location, use history, and other information.  It was possible to get a good ballpark estimate 65% of the time without using ML, and without using anything but userid as an input. The ML techniques, ranged in accuracy from about 18% to 50%, a bit disappointing.  14.3% would have been expected from random guessing, because I had 7 bins of durations.  It would be unreasonable to expect the computer to predict the duration of the session down to the minute, so I created 7 bins, corresponding to the quartic root of observed session duration.  The quartic root was arbitrary, but some kind of binning process was necessary.  
+
+I first attempted this question with a neural network from the nnet package.  I found the nnet package to be the most user-friendly, but also very limited.  It only worked with 1 hidden layer.  It also refused to execute if the "userid" was used as an input, because the very large input layer (572 users) would require too many weights for the program to be comfortable.  The nnet package also only had an accuracy of around 19%, little better than random chance.
+
+Since I had some experience with TensorFlow, I attempted to use it for this project.  TensorFlow is a neural network package that handles enormous amounts of data with far more speed and accuracy than nnet, and can accommodate very large input layers and multiple hidden layers.  But after many hours, I could not successfully execute it either in R or Python.  I settled for another neural network package called neuralnet.  It was slightly less user-friendly than nnet, and it required dummy variables, but it could use multiple hidden layers and give higher accuracy.  It was also slow.  I have set it up here to execute as quickly as possible, with only 1 hidden layer of width 1, but I've also copied the various outputs with different widths and numbers of hidden layers which took longer to execute.  You can control the hidden layers manually, with the input "hidden = c(3,3)" to tell it you would like 2 layers of width 3.  The outputs I obtained demonstrate that the accuracy tends to increase with higher width and higher numbers of input layers.  But weird things also happen- sometimes it guesses the longest duration bin for everyone, inexplicably.  I demonstrated overfitting in one model by comparing the test predictions to the training predictions, and showed them to be very different.
+
+With neuralnet, I started by analyzing the whole dataset of sessions, and achieved only about 30% accuracy in binning a session's duration.  Then I removed the duplicate sessions.  The accuracy increased slightly.  Then, I selected the training and test data in a new way, with the training data consisting of the first 3 weeks of the month and the test data consisting of the rest.  I felt that this was the most similar to a real-world exercise, where the analyst has access to past data and tries to predict future data.  The accuracy did not change very much.
+
+I attempted to predict duration by giving to neuralnet all the users' userids as an input, but the program was so slow it would not work at all.  I commented it out below.
+
+I then set up an SVM to perform the same task as the previous neural network.  It had a higher accuracy than the neural network without using userids, 48.5%.  It also worked even better when the userids were taken as inputs, with higher accuracy, 52%.  This SVM did not work on RStudio Cloud, but it worked locally.  I have commented it out for your convenience.  It worked because it guessed bin 2 and 3 for all sessions, and those happened to be the best guesses most of the time.  I was a bit surprised by this behavior, because not all users had a plurality of their sessions in the bin 2 - 3 range.  I would have expected at least a few sessions to be predicted in bins 0, 1, or 4 given the known user behavior from the training dataset.
+
+I then made an extremely simple prediction of duration based only on userid: I took a user's usual duration as measured in the training dataset (first 3 weeks of the month), and set it as their "score" for every test session in the test dataset.  It was usually bin 2 or 3, but also occasionally 0, 1, or 4 for a few of the users.  I did not make any adjustment for the day of the week, time of day, site, job, or anything else.  This extremely simple model resulted in >65% accuracy, much higher than any of the more advanced machine learning techniques used earlier.  Past behavior is clearly a good indicator of future performance when it comes to user session duration.
+
+This information could be useful because the computer program could be used to notify an administrator when there is a danger of exceeding the 90 licenses for use.  For example, let's say a large number of users logs in at one time and raises the total load to 80.  The computer will notify the administrator if their session duration tends to be very long, but not if their session duration tends to be very short.
+
+Data collected:
+
+Method                    Accuracy%
+
+nnet
+
+All data except userid
+100 iterations              18.7
+300 iterations              19.3
+
+neuralnet
+
+All data except userid
+1 layer, width 2            18.4
+1 layer, width 5            32.5
+2 layers, width 2           25.3 - 40.8 high variation
+
+All data except userid, 
+no duplicate logins
+1 layer, width 2            20.9
+1 layer, width 5            26.6
+2 layers, width 2           43.5
+2 layers, width 3           8.5 - 14.9  Overfitting was demonstrated
+
+All data except userid
+and week of month,
+no duplicate logins,
+training done on 1st
+3 weeks of month
+1 layer, width 2            24
+1 layer, width 5            26.8
+2 layers, width 2           22.7
+
+Hour and weekday only
+1 layer, width 2            27.9
+1 layer, width 5            30.1
+2 layers, width 2           24
+
+All data including userid   No output, too slow
+
+SVM
+Hour and weekday only       48.5
+Userid, hour, weekday       52.6                   
+
+NON-ML METHOD
+Userid only, no learning    65.7
+
+NON-ML detail
+    predicted
+actual
+   0 1    2    3  4    
+0  2 0  128  415  2 0 0 (547)
+1  5 1   83   92  0 0 0 (181)
+2  8 0 2069  716  5 0 0 (2793)
+3 12 2  683 3358 33 0 0 (4088)
+4  0 0   62  562 22 0 0 (646)
+5  0 0    4   32  6 0 0 (42)
+6  0 0    0    0  0 0 0 (0)  (total 8297)
+
+Accuracy =  0.657 
+ 
+              0     1     2     3     4   5   6
+Precision 0.004 0.006 0.739 0.821 0.034   0 NaN
+Recall    0.074 0.333 0.683 0.649 0.324 NaN NaN
+F1        0.007 0.011 0.710 0.725 0.062 NaN NaN
+
+The non-ML method predicted bin 2 and 3 for most sessions, which was usually the correct answer (2-16 minutes and 17-81 minutes, respectively).  It did a significantly better job than random guessing between bin 2 and 3, which would have only yielded <49%. 4088/8297 is 49%, which is the maximum accuracy that this "model" could have achieved if it had just guessed the most popular bin 3 for everything.
+
+
+Part 2:
+
+The question I wanted to answer for Part 2 was how to reduce unnecessary user load. The answer is to find users with a high number of simultaneous sessions and work with them to reduce them.  The user load was very high in the first 2 weeks of the month and exceeded the threshold of 90 one day, but load was lighter for the rest of the month.  It would be interesting to analyze April and see if the trend of high use followed by low use is repeated.
+
+I recalled the guidance from Project 2, that there were 90 licenses for authorized and limited users to be logged in at the same time.  First I had to plot the user load over time.  On the first Tuesday of March, there were 91 authorized and limited users, even after subtracting duplicate sessions.  This would be a problem.  Some better news was the fact that user load did not exceed about 65 for the last 2 and a half weeks of the month.  But the high user load is a problem that needs to be addressed.
+
+A reduction of simultaneous sessions would be the simplest way to reduce the user load, because they account for about 11% of all sessions and about 5% of total load even after subtracting duplicate sessions.  It would be nice to get effectively 4-5 new license spaces for free.  The question of how these simultaneous sessions arise is beyond the scope of the data given.  But we can use the data given to determine which users are adding the most load through simultaneous sessions, then ask them why they have so many simultaneous sessions.  
+
+I created a new categorical column called HighSimulUser which indicated the users with a high number of simultaneous sessions.  The statistical test I used to assign users to this category was Tukey's fence, which classified a user as a HighSimulUser if their number of simultaneous sessions was too high.  That cutoff was 1.5x the inner quartile range plus the 3rd quartile.  70 out of 572 users fell into this category, about 12.2% of them.  None of them worked on the pipelines, and LA had slightly more than its fair share of HighsimulUsers.  Some job types were also very overrepresented, including scheduler and contract supervisor.
+
+
+
+
+###Part 3 (Reflection)
+
+I was really looking forward to using TensorFlow as a neural network.  I had a very hard time setting it up 5 months ago, but it worked far better than nnet or neuralnet, both in terms of speed and accuracy.  Unfortunately it proved to be even more difficult to set up over a period of days, and I could not make it work either in RStudio or in Jupyter after attacking the problem from countless different angles.  It took so many hours, I concluded it might not work at all and it would be better to cut bait and move on.  I might come back to this topic because TensorFlow is used a great deal for image recognition, and I have some ideas on that topic for my final project.
+
+1. How has your comfort level changed now that you are coming off Project 2 and have the same data to work with?
+
+I have gotten a lot faster at coding and thinking about different ways to view the data.  I have gotten very comfortable manipulating dataframes and creating new variables.
+
+2. Do you see any similarities between the Machine Learning and Research Methods pieces here?
+
+The research methods tend to focus on quantifying error and anomalies.  ML uses error detection extensively to optimize models.  The statistical test methods in research methods were relatively easy to understand and to implement.  ML was more difficult.  I think of ML as a way to take research methods to the next level.  
+
+3. Did you take advantage of the student worksessions? How did those help?
+
+I absolutely took advantage and enjoyed seeing fresh new ideas from everybody.
+
+4. What was your biggest growth point, or obstacle you overcame, in the course of this project?
+
+The biggest growth area was to get more comfortable using the R language.  I can't quite write a ggplot from scratch yet, much less a machine learning code block, but I have copied and manipulated them countless times in the course of this project and gained a deeper understanding.  I feel very comfortable manipulating dataframes now.
+
+At the start of the project, I didn't know which questions I wanted to answer, so I answered all of them (except section 2 part 2.  I had a feeling it wouldn't turn out well, and I have previous experience with some anomaly detection software that I didn't like very much).  I used kmeans clustering, a decision tree random forest, an SVM, linear model, chi-squared, and Wilcoxon-Mann-Whitney, and it ended up over 2000 lines.  The code all worked, which made me proud.  Overall, I was disappointed with most of the results.  There were no neat clusters or separations as there had been for the setosa, virginica, and versicolor flowers in the lab.  Overall use of the Maximo system was very evenly distributed between jobsites, and followed expected working hours.  Some observations were easy to demonstrate graphically.  For example, weekend use increased significantly over the month, but it was unclear how such observations would help the business.
+
+I learned a lot about significance tests when trying analyze Section 2 Question 1.  The Chi-squared test gave a much higher significance in difference between TX and LA than I was expecting compared to the bargraph I generated.  I felt that the bargraph was a much better representation of the big picture.  
+
+In summary, I was hoping to find some very useful insights into the data, and was disappointed that there wasn't much I could find.  I was also worried that there were useful insights to be made, but I was missing them!  But in terms of a learning experience, this project was great.  It's like finishing your first whole book in a foreign language, or the first time through a very difficult piece of music on the piano.  You just have to do it if you want to get good at it.  I may not have made any groundbreaking insights into the data above, but this practice has made it more likely that I will be able to find insights into other data in the future.
+
+I'd recommend the MNIST database as practice, the only problem being that everyone else in the world has already posted solutions online.  I'd like to apply some of the basics of image recognition to a real life problem.
+
+
+
+### The Data
+
+The data file is included in this project. The filename is **PROJECT3_DATA.csv**.
+
+| Field     | Description   |
+  |-----------|--------------|
+  | attemptdate        | Date and Time of event          |
+  | attemptresult | LOGIN, LOGOUT, TIMEOUT, or SYSLOGOUT |
+  | userid  | The user triggering the event |
+  | type      | User type, e.g., AUTHORIZED |
+  | defsite      | User site, e.g., LA or TX |
+  | groupname      | User group, e.g., IT ANALYST |
+  | maxsessionuid   | Unique identifer for a session.|
+  
+```{r Importing data from csv}
+rm(list=ls()) # remove any previous data
+#if("installr" %in% rownames(installed.packages()) == FALSE) {install.packages("installr")}
+#if("devtools" %in% rownames(installed.packages()) == FALSE) {install.packages("devtools")}
+#install --- if("Rtools" %in% rownames(installed.packages()) == FALSE) {install.packages("Rtools")}
+if("rmarkdown" %in% rownames(installed.packages()) == FALSE) {install.packages("rmarkdown")}
+if("lubridate" %in% rownames(installed.packages()) == FALSE) {install.packages("lubridate")}
+#if("stringr" %in% rownames(installed.packages()) == FALSE) {install.packages("stringr")}
+if("dplyr" %in% rownames(installed.packages()) == FALSE) {install.packages("dplyr")}
+if("ggplot2" %in% rownames(installed.packages()) == FALSE) {install.packages("ggplot2")}
+if("gridExtra" %in% rownames(installed.packages()) == FALSE) {install.packages("gridExtra")}
+if("caret" %in% rownames(installed.packages()) == FALSE) {install.packages("caret")}
+if("lattice" %in% rownames(installed.packages()) == FALSE) {install.packages("lattice")}
+if("repr" %in% rownames(installed.packages()) == FALSE) {install.packages("repr")}
+if("e1071" %in% rownames(installed.packages()) == FALSE) {install.packages("e1071")}
+if("MLmetrics" %in% rownames(installed.packages()) == FALSE) {install.packages("MLmetrics")}
+if("cluster" %in% rownames(installed.packages()) == FALSE) {install.packages("cluster")}
+if("MASS" %in% rownames(installed.packages()) == FALSE) {install.packages("MASS")}
+#if("ez" %in% rownames(installed.packages()) == FALSE) {install.packages("ez")} crashes
+#if("randomForest" %in% rownames(installed.packages()) == FALSE) {install.packages("randomForest")}
+if("nnet" %in% rownames(installed.packages()) == FALSE) {install.packages("nnet")}
+#if("RSNNS" %in% rownames(installed.packages()) == FALSE) {install.packages("RSNNS")}
+if("neuralnet" %in% rownames(installed.packages()) == FALSE) {install.packages("neuralnet")}
+#if("keras" %in% rownames(installed.packages()) == FALSE) {install.packages("keras")}
+#if("tfestimators" %in% rownames(installed.packages()) == FALSE) {install.packages("tfestimators")}
+#if("tensorflow" %in% rownames(installed.packages()) == FALSE) {install.packages("tensorflow")}
+
+
+#library(devtools)
+#library(Rtools)
+#library(installr)
+#updateR()
+library(rmarkdown)
+library(lubridate)
+#library(stringr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+#library(caret)
+#library(repr)
+#library(e1071)
+#library(MLmetrics)
+#library(cluster)
+#library(MASS)
+#library(nnet)
+# library(ez) crashes
+
+
+```
+
+```{r}
+rm(list=ls()) # remove any previous data
+Proj3Data <- read.csv(file = 'PROJECT3_DATA.csv')
+
+```
+
+A significant amount of preprocessing must be done before answering any of the questions.
+
+The following block gathers some basic information on users by creating a new dataframe of unique users.  The program searched through Proj3Data which had 53046 lines, and selected unique occurrences of userid, type, site (defsite), and job (groupname).  If any user had more than one type or defsite associated with them, they would appear twice in the UniqueUser data frame.  UniqueUser was 574 lines long.  A further query into the unique users within UniqueUser resulted in 572, lower by 2, which means that 2 users have more than one characteristic over the course of the month.  That characteristic happened to be their job, or groupname.
+
+```{r Gathering basic information on users and data exploration}
+#table(Proj3Data[["defsite"]])
+UniqueUser <- unique(Proj3Data[c("userid","type","defsite","groupname")])
+cat("Unique user rows:\n")
+length(UniqueUser$userid)
+# there are 574 unique rows
+cat("\nUnique users:\n")
+length(unique(UniqueUser$userid))
+# but only 572 unique users
+DupUsers <- UniqueUser[duplicated(UniqueUser$userid),]
+# HBA1629 and HBA1622 appear twice
+UniqueUser2 <- UniqueUser[duplicated(UniqueUser$userid)==FALSE,]
+# The purpose of this loop is to get the first instances of the duplicated rows into DupUsers
+
+
+
+#row.names(UniqueUser) <- UniqueUser$userid
+#UniqueUser[DupUsers,]
+#UniqueUser[UniqueUser$userid == UniqueUser[duplicated(UniqueUser$userid),1]]
+#UniqueUser[(UniqueUser$userid == "HBA1622"| UniqueUser$userid == "HBA1629"),]
+#UniqueUser[UniqueUser$userid %in% (UniqueUser[duplicated(UniqueUser$userid),1])]
+cat("\nUser types:\n")
+table(UniqueUser2$type)
+cat("\nUser locations:\n")
+table(UniqueUser2$defsite)
+cat("\nUser jobs:\n")
+table(UniqueUser2$groupname)
+```
+
+There are 139 Authorized users, 16 Express, and 417 Limited.  
+
+There are 23 different kinds of jobs.
+
+There are 335 unique users in Louisiana, 222 in Texas, and 15 users spread between 3 pipelines in LA, TX, and OK.
+
+
+```{r}
+for(val in DupUsers$userid){
+  #  print(UniqueUser2[UniqueUser2$userid == val,])  
+  DupUsers <- rbind(DupUsers,UniqueUser2[UniqueUser2$userid == val,])  
+}
+
+DupUsers[order(DupUsers$userid),]
+```
+
+Users HBA1622 and HBA1629 had 2 different jobs each over the course of the month. They are listed above
+
+The next block of code will create a merged table where each row will have a login and logout datestamp.  
+
+```{r}
+names(Proj3Data)[1] <- "attemptdate" #some strange special characters were introduced and had to be corrected
+SessionYMDTime <- Proj3Data
+#SessionUnixTime$attemptdate <- as.numeric(mdy_hm(Proj3Data$attemptdate))
+SessionYMDTime$attemptdate <- mdy_hm(Proj3Data$attemptdate)
+SessionStart <- SessionYMDTime[SessionYMDTime$attemptresult == "LOGIN",]
+SessionEnd <- SessionYMDTime[SessionYMDTime$attemptresult != "LOGIN",]
+SessionStartEnd <- merge(SessionStart, SessionEnd, by = "maxsessionuid")
+
+```
+
+Now we have a table with all sessions, and a start and end time in minutes.  Next steps will be to clean up the data a bit, delete redundant columns, and check for duplicates.  The redundant columns are shown to be userid.y, type.y, and defsite.y.  Groupname.y may be different from groupname.x in 47 rows, so these rows are kept.
+
+```{r Cleaning}
+for(val in c("userid","type","defsite","groupname")){
+  cat("\n",val)
+  print(table(SessionStartEnd[,paste(val,".y", sep = "")] == SessionStartEnd[,paste(val,".x", sep = "")]))
+}
+```
+This data shows that userid, type, and defsite are always redundant between login and logout.  The logout values for these will be removed, but groupname will stay, because there are 47 cases where the user's groupname changed in the session.  This might be useful to look at, so it will be kept.  Below are the 47 lines where the user's job changed within the session.  The jobs listed are planner, quick reporting user, and maintenance supervisor.
+
+```{r}
+SessionStartEnd[SessionStartEnd$groupname.y != SessionStartEnd$groupname.x,names(SessionStartEnd) %in% c("userid.x","groupname.x","groupname.y")]
+```
+
+Here we'll get rid of the redundant columns
+```{r}
+SessionStartEnd <- SessionStartEnd[,!(names(SessionStartEnd) %in% c("defsite.y","type.y","userid.y"))]
+# drop redundant columns
+```
+
+This next block checks for NA values.  There are none.
+```{r}
+table(complete.cases(SessionStartEnd))
+# See if there are any NAs, incomplete cases.  There are none
+
+```
+
+To elaborate on the data, I created new columns to document the properties of each session. These include duration, hour of login, day of the week, and week of the month.  Further below, I will document duplicated sessionids, simultaneous sessionids, and off-hours logins.
+
+```{r Session log}
+SessionStartEnd3 <- SessionStartEnd[order(SessionStartEnd$maxsessionuid,SessionStartEnd$attemptdate.y),]
+SessionStartEnd3$duration <- as.numeric(difftime(SessionStartEnd3$attemptdate.y,SessionStartEnd3$attemptdate.x, unit="mins"))
+
+SessionStartEnd3$LoginHour <- hour(SessionStartEnd3$attemptdate.x)
+
+SessionStartEnd3$WeekDay <- wday(SessionStartEnd3$attemptdate.x)
+
+MonthWeekConverter <- function(date){
+  FirstOfMonth <- (paste(as.character(year(date)),"-",as.character(month(date)),"-01 00:00:00",sep=""))
+  offset <- wday(FirstOfMonth) - 1
+  MonthWeek <- ceiling((day(date)+offset)/7)
+  return(MonthWeek)
+}
+
+SessionStartEnd3$MonthWeek <- MonthWeekConverter(SessionStartEnd$attemptdate.x)
+# This may seem a bit too complicated, but it will work for other months more easily if copied over
+
+print("Logins by date")
+for(val in 1:5){
+  print(table(date(SessionStartEnd3[SessionStartEnd3$MonthWeek == val,"attemptdate.x"])))
+}
+#View(SessionStartEnd4[SessionStartEnd4$MonthWeek == 4,"attemptdate.x"])
+
+```
+This is a calendar of sessions in March.
+
+The following code shows that there are about 2282 redundant sessionids.
+
+```{r}
+table(duplicated(SessionStartEnd$maxsessionuid))
+```
+DupSessionid will use a 0 or 1 to indicate whether a sessionid was duplicated
+
+```{r}
+SessionStartEnd3$DupSessionid <- as.numeric(duplicated(SessionStartEnd3$maxsessionuid))
+table(SessionStartEnd3$DupSessionid)
+```
+
+I want to find and make note of simultaneous sessions.  These are sessions where a single user is logged on more than once at the same time, with different sessionids.  These are populated into a new dataframe, SessionStartEnd4, which is organized first by userid.x, then by login timestamp which is attemptdate.x
+
+
+```{r Simultaneous sessions}
+SessionStartEnd4 <- SessionStartEnd3[order(SessionStartEnd3$userid.x,SessionStartEnd$attemptdate.x),]
+#Sometimes the sessionids are out of order with the recorded start time.  For the code below, we need to make sure the login times are all in order.
+SessionStartEnd4$Simultaneous <- 0 #initialize the column to 0
+
+cat("Total sessions:\n")
+(length(SessionStartEnd4$attemptdate.x))
+
+for(val in 2:(length(SessionStartEnd4$attemptdate.x))){
+  if(difftime(SessionStartEnd4$attemptdate.y[val-1],SessionStartEnd4$attemptdate.x[val])>0){
+    SessionStartEnd4$Simultaneous[val] <- 1
+  }
+}
+cat("\nDuplicated sessionids:")
+table(SessionStartEnd4$DupSessionid)
+cat("\nSimultaneous sessions by same user:")
+table(SessionStartEnd4$Simultaneous)
+```
+```{r}
+length(SessionStartEnd4$DupSessionid[SessionStartEnd4$DupSessionid == 1])/length(SessionStartEnd4$DupSessionid)
+length(SessionStartEnd4$Simultaneous[SessionStartEnd4$Simultaneous == 1])/length(SessionStartEnd4$Simultaneous)
+```
+This block shows that about 8.24% of sessions are duplicates, and 23.3% are simultaneous sessions including duplicates.
+
+It's hard to know without further investigation exactly to what extent those simultaneous sessions overlap.  All duplicate sessions are also simultaneous sessions, so if we removed them and reran the code, we will get far fewer simultaneous sessions.  But non-duplicate simultaneous sessions will definitely still be something we want to reduce since we sometimes exceed the threshold of 90 user licenses (which will be shown in Part 2).  I'm creating Simultaneous2 to display which simultaneous sessions are a result of user behavior as opposed to the Maximo system missing a logout and creating a duplicate sessionid.  This will also result is a much better model of true user behavior.
+
+```{r}
+SessionStartEnd4$Simultaneous2 <- 0
+
+for(val in 2:(length(SessionStartEnd4$attemptdate.x))){
+  if(difftime(SessionStartEnd4$attemptdate.y[val-1],SessionStartEnd4$attemptdate.x[val])>0 & 
+      SessionStartEnd4$DupSessionid[val-1] == 0 & 
+      SessionStartEnd4$DupSessionid[val] == 0){
+    SessionStartEnd4$Simultaneous2[val] <- 1
+  }
+}
+length(SessionStartEnd4$DupSessionid[SessionStartEnd4$DupSessionid == 1])/length(SessionStartEnd4$DupSessionid)
+length(SessionStartEnd4$Simultaneous[SessionStartEnd4$Simultaneous == 1])/length(SessionStartEnd4$Simultaneous)
+length(SessionStartEnd4$Simultaneous2[SessionStartEnd4$Simultaneous2 == 1])/length(SessionStartEnd4$Simultaneous2)
+```
+Even when duplicated sessions are eliminate, simultaneous sessions are a significant proportion of the total, 11.4%.
+
+In the next block, the days of the week are converted to an ordered factor of character strings.  This makes them more obviously categorical data for manipulation later.
+
+I introduced yet another variable for off hours, 0 or 1, representing whether a login is before 8AM or after 6PM.  This information is used in Section 2 Question 2 (which I did not include here, but it will be in a separate markdown file in case you would like to look).
+
+```{r}
+Wdayconverter <- c("Sun","Mon","Tue","Wed","Thu","Fri","Sat")
+
+for(val in 1:(length(SessionStartEnd4$WeekDay))){
+  SessionStartEnd4$WeekDay[val] <- Wdayconverter[as.numeric(SessionStartEnd4$WeekDay[val])]
+}
+
+SessionStartEnd4$WeekDay <- factor(SessionStartEnd4$WeekDay, levels=Wdayconverter, ordered=TRUE)
+
+cat("\nOff hours sessions, 6PM to 8AM:")
+
+SessionStartEnd4$SixPMto8AM <- as.numeric(SessionStartEnd4$LoginHour < 8 | SessionStartEnd4$LoginHour > 18)
+table(SessionStartEnd4$SixPMto8AM)
+
+```
+This is enough for basic data exploration.  Now the questions can be answered
+
+
+### Part 1 (Machine Learning Concepts)
+
+
+3. Come up with your own question that involves principles of machine learning and is relevant to the business. Write it out, explain your rationale, and solve.
+ 
+Is there a way to predict how long a user's session will last?  
+
+Answer: you can ballpark it about 40% of the time.  I created a small number of duration bins that mapped to the quartic root of the duration: 
+0 minute
+1 minute
+2-16 minutes
+17-81 minutes
+82-256 minutes
+257-625 minutes
+625-1296 minutes.  
+
+
+My first neural network could guess the correct bin about 18% of the time.  Using a different neural network, I could obtain  up to 40% accuracy.  An SVM gave >50%, and a very dumb non-ML method delivered 65% surprisingly.
+
+```{r}
+library(caret)
+library(nnet)
+library(MLmetrics)
+```
+
+```{r}
+SessionStartEnd7 <- SessionStartEnd4
+SessionStartEnd7$CRTime <- as.factor(ceiling(SessionStartEnd7$duration**(1/4))) #uses quartic (initially cube) root to reduce durations to reasonable bins.
+table(SessionStartEnd7$CRTime)
+
+```
+While not completely balanced, we get a fair number of sessions in every bin.  The number of users in bin 4 will decrease later when duplicate sessions are removed, because they almost always land in bin 4 (120 minutes is very common for them, and it is in the 82-256 minute range).
+
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(SessionStartEnd4[,'defsite.x'], times = 1, p = 0.5, list = FALSE)
+training = SessionStartEnd7[partition,] # Create the training sample
+dim(training)
+test = SessionStartEnd7[-partition,] # Create the test sample
+dim(test)
+#head(test)
+
+```
+This partition creates 2 roughly equal sets of data, training and test, from throughout the month.
+
+
+```{r}
+set.seed(6677)
+nn_mod = nnet(CRTime ~ type.x + defsite.x + groupname.x + LoginHour + WeekDay + MonthWeek, data = training, size = c(20))
+
+
+```
+
+
+
+```{r}
+probs = predict(nn_mod, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+test$scores = apply(probs, 1, which.max)
+head(test)
+
+```
+
+
+```{r}
+print_metrics = function(df, label){
+    ## Compute and print the confusion matrix
+    cm = as.matrix(table(Actual = df$CRTime, Predicted = df$scores))
+    #print(cm)
+    #print(colnames(cm))
+    #print(dim(cm)[1])
+    if(!("0" %in% colnames(cm))){
+      cm <- cbind(rep(0,dim(cm)[1]),cm)
+    }
+    #print(cm)
+    #print(colnames(cm))
+    #print(cm[1:2,])
+    if(!("2" %in% colnames(cm))){
+      cm <- cbind(cm[,1:2],rep(0,dim(cm)[1]),cm[,3:6])
+    }
+    print(cm)
+
+    ## Compute and print accuracy 
+    accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+    cat('\n')
+    cat(paste('Accuracy = ', as.character(accuracy)), '\n\n')                           
+
+    ## Compute and print precision, recall and F1
+    precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+    recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+    F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+    metrics = sapply(c(precision, recall, F1), round, 3)        
+    metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))       
+    dimnames(metrics) = list(c('Precision', 'Recall', 'F1'), unique(test$CRTime[order(test$CRTime)]))      
+    print(metrics)
+    #print(precision)
+    #print(recall)
+    #print(F1)
+}  
+print_metrics(test, 'CRTime')  
+
+#print("accuracy of about 18%")
+
+```
+     1      3    4  5 6
+0 0 18 0  211  783  2 0
+1 0  3 0  109  181  1 0
+2 0  9 0 2221 1978  8 2
+3 0  7 0 1010 5105 21 3
+4 0  9 0  250 1565 14 2
+5 0  1 0   31  270  7 0
+6 0  0 0    2   12  0 0
+
+Accuracy =  0.187 
+
+            0     1   2     3     4     5   6
+Precision   0 0.010   0 0.164 0.851 0.023   0
+Recall    NaN 0.064 NaN 0.263 0.158 0.132   0
+F1        NaN 0.018 NaN 0.202 0.267 0.039 NaN
+
+This neural network did not do a great job predicting output.  The accuracy is about 18.7%.  It never guessed bin 2 for anything, which was the 2nd most common bin, and it fared little better than random guessing which would have yielded 14.3% (1/7).
+
+I want to try it one more time with more iterations.  It appeared above that the model was not optimized, because the error was still going down significantly with iterations.  Let's increase it from 100 to 300.  The residual error went down from 16700 to 16360.
+
+```{r}
+set.seed(6677)
+nn_mod = nnet(CRTime ~ type.x + defsite.x + groupname.x + LoginHour + WeekDay + MonthWeek, data = training, size = c(20), maxit = 300)
+
+
+```
+
+
+
+```{r}
+probs = predict(nn_mod, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+test$scores = apply(probs, 1, which.max)
+head(test)
+
+```
+
+
+```{r}
+print_metrics(test, 'CRTime')  
+```
+     1      3    4  5 6
+0 0 25 0  219  760  9 1
+1 0  5 0  110  178  1 0
+2 0 15 0 2286 1898 16 3
+3 0 11 0 1140 4955 36 4
+4 0  7 0  293 1514 24 2
+5 0  2 0   39  258  8 2
+6 0  0 0    0   14  0 0
+
+Accuracy =  0.193 
+
+            0     1   2     3     4     5   6
+Precision   0 0.017   0 0.185 0.823 0.026   0
+Recall    NaN 0.077 NaN 0.279 0.158 0.085   0
+F1        NaN 0.028 NaN 0.223 0.265 0.040 NaN
+
+The accuracy increased very slightly to 19.3%.
+
+I learned that nnet only has 1 hidden layer, so I'm going to use the neuralnet library to see if it does a better job with multiple hidden layers.
+
+```{r}
+library(neuralnet)
+```
+
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(SessionStartEnd4[,'defsite.x'], times = 1, p = 0.5, list = FALSE)
+training = SessionStartEnd7[partition,] # Create the training sample
+dim(training)
+test = SessionStartEnd7[-partition,] # Create the test sample
+dim(test)
+head(test)
+
+```
+One enormous difference is that CRTime will be numeric now instead of a factor.  The variables also need to be encoded as dummy variables.
+
+```{r}
+SessionStartEnd7 <- SessionStartEnd4
+SessionStartEnd7$CRTime <- as.numeric(ceiling(SessionStartEnd7$duration**(1/4))) #uses quartic (originally cube) root to reduce durations to reasonable bins.
+SessionStartEnd7$WeekDay <- as.character(SessionStartEnd7$WeekDay)
+```
+
+The variables will be input as one-hot encoding.  This needs to be spelled out with the neuralnet package.  It is slightly less user friendly than nnet.
+
+```{r}
+dummies = dummyVars(duration ~ CRTime + defsite.x + groupname.x + type.x + WeekDay + as.character(LoginHour) + as.character(MonthWeek), data = SessionStartEnd7)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd7))
+names(Session_dummies)
+```
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(Session_dummies[,'defsite.xTX'], times = 1, p = 0.5, list = FALSE)
+training = Session_dummies[partition,] # Create the training sample
+dim(training)
+test = Session_dummies[-partition,] # Create the test sample
+dim(test)
+#head(test)
+
+```
+This package requires values to be in or around the range of 0-1, so they need to be scaled.  Do not execute this block twice, or the variable "ratio" will be messed up.  We need it later.
+
+```{r}
+
+#num_cols = c('CRTime','duration')
+#preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+head(training[,"CRTime"])
+ratio <- max(training[,"CRTime"])
+ratio
+training[,"CRTime"] <- training[,"CRTime"]/ratio
+test[,"CRTime"] = test[,"CRTime"]/ratio
+head(training[,"CRTime"])
+range(training$CRTime)
+
+```
+
+```{r}
+nn <- neuralnet(CRTime ~ ., data=training, hidden=c(2), linear.output = FALSE)
+```
+```{r}
+plot(nn)
+```
+It is necessary to rescale the duration bins back to their original values, as well as the score values.
+```{r}
+if(max(test$CRTime)<2){ # This "if" statement guarantees that if you execute the code block twice, it won't multiply twice.
+  test$CRTime <- round(test$CRTime*ratio,1)
+}
+unique(test$CRTime)
+```
+
+
+```{r}
+probs = predict(nn, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+test$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+head(test)
+unique(test$scores)
+```
+
+```{r}
+print_metrics(test, 'CRTime')   
+```
+1 layer, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0  109  431  203  201   39   14    1
+     1   49  106   66   52   16    4    1
+     2 1721 1272  688  405  102   34    7
+     3  550 1900 1521 1421  497  183   51
+     4  131  425  440  545  202   79   31
+     5   15   53   62  122   42   23    9
+     6    0    3    4    5    2    0    0
+
+Accuracy =  0.184 
+
+              0     1     2     3     4     5   6
+Precision 0.109 0.361 0.163 0.232 0.109 0.071   0
+Recall    0.042 0.025 0.231 0.517 0.224 0.068   0
+F1        0.061 0.047 0.191 0.320 0.147 0.069 NaN
+
+
+1 layer, width 5
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    8  164  438  295   78   15    0
+     1    4   41  139   88   19    3    0
+     2   25 1336 1878  808  160   22    0
+     3   29  602 2420 2231  696  143    2
+     4    8  154  568  736  323   62    2
+     5    1   21   61  150   72   21    0
+     6    0    2    2    5    4    1    0
+
+Accuracy =  0.325 
+
+              0     1     2     3     4     5   6
+Precision 0.008 0.139 0.444 0.364 0.174 0.064   0
+Recall    0.107 0.018 0.341 0.517 0.239 0.079   0
+F1        0.015 0.031 0.386 0.428 0.202 0.071 NaN
+
+2 layers, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0  308   15   21  501    5    5  143
+     1  102    4    9  134    0    3   42
+     2 2328   51   68 1454   19   19  290
+     3 1239   68  135 3099   44   68 1470
+     4  268   15   31  879   14   20  626
+     5   30    8    4  124    4    2  154
+     6    2    0    1    9    0    0    2
+
+Accuracy =  0.253 
+
+              0     1     2     3     4     5     6
+Precision 0.309 0.014 0.016 0.506 0.008 0.006 0.143
+Recall    0.072 0.025 0.253 0.500 0.163 0.017 0.001
+F1        0.117 0.018 0.030 0.503 0.014 0.009 0.001
+
+2 layers, width 2, rerun
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0   14    9  203  590   12  165    5
+     1    4    1   66  161    4   52    6
+     2   38   24 1918 1881   30  309   29
+     3   26   21  824 3527   76 1548  101
+     4    4    4  197  940   35  645   28
+     5    1    0   24  132    3  153   13
+     6    0    0    0    8    0    6    0
+
+Accuracy =  0.408 
+
+              0     1     2     3     4     5   6
+Precision 0.014 0.003 0.454 0.576 0.019 0.469   0
+Recall    0.161 0.017 0.593 0.487 0.219 0.053   0
+F1        0.026 0.006 0.514 0.528 0.035 0.096 NaN
+
+
+40.8% is not terrible, but this neural networks still isn't working as well as I had hoped.  The models take a long time to build.  They often get stuck and have to be restarted.  
+
+I want to rework the neural network by removing the duplicate logins, which as we know tended to be 120 minutes long.  This will likely result in higher accuracy by making the data more unbalanced, with more short sessions, and also by more accurately reflecting actual user behavior.  It will take a great deal of sessions out of the 82-256 minute bin, bin #4 out of 0-6.
+
+
+```{r}
+SessionStartEnd7 <- SessionStartEnd4[SessionStartEnd4$DupSessionid == 0,]
+SessionStartEnd7$CRTime <- as.numeric(ceiling(SessionStartEnd7$duration**(1/4))) #uses quartic (originally cube) root to reduce durations to reasonable bins.
+SessionStartEnd7$WeekDay <- as.character(SessionStartEnd7$WeekDay)
+```
+
+
+```{r}
+dummies = dummyVars(duration ~ CRTime + defsite.x + groupname.x + type.x + WeekDay + as.character(LoginHour) + as.character(MonthWeek), data = SessionStartEnd7)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd7))
+names(Session_dummies)
+```
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(Session_dummies[,'defsite.xTX'], times = 1, p = 0.5, list = FALSE)
+training = Session_dummies[partition,] # Create the training sample
+dim(training)
+test = Session_dummies[-partition,] # Create the test sample
+dim(test)
+head(test)
+
+# the number of training and test samples has been reduced to only 25392 from 26764
+
+```
+
+```{r}
+
+#num_cols = c('CRTime','duration')
+#preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+head(training[,"CRTime"])
+ratio <- max(training[,"CRTime"])
+ratio
+training[,"CRTime"] <- training[,"CRTime"]/ratio
+test[,"CRTime"] = test[,"CRTime"]/ratio
+head(training[,"CRTime"])
+range(training$CRTime)
+
+```
+
+
+
+```{r}
+nn <- neuralnet(CRTime ~ ., data=training, hidden=c(1), linear.output = FALSE)
+
+plot(nn)
+```
+```{r}
+if(max(test$CRTime)<2){
+  test$CRTime <- round(test$CRTime*ratio,1)
+}
+
+probs = predict(nn, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+test$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+#head(test)
+unique(test$scores)
+```
+
+```{r}
+print_metrics(test, 'CRTime')   
+```
+1 layer, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0  282   15  456  123    9    5  134
+     1  108    5  101   39    3    3   26
+     2 2059   77 1237  566   26   19  219
+     3 1210   56 2225 1095   83   61 1321
+     4  128    8  293  175   25   19  394
+     5   12    0   24   16    0    5   32
+     6    0    0    1    1    0    0    0
+
+Accuracy =  0.209 
+
+              0     1     2     3     4     5   6
+Precision 0.275 0.018 0.294 0.181 0.024 0.056   0
+Recall    0.074 0.031 0.285 0.543 0.171 0.045   0
+F1        0.117 0.022 0.290 0.272 0.042 0.050 NaN
+
+1 layer, width 5
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    1   24   40  558  308   88    5
+     1    0    8   11  171   74   19    2
+     2    5   11  150 2964  899  170    4
+     3    1    8  138 2756 2206  882   60
+     4    0    0    8  326  442  248   18
+     5    0    0    1   34   33   16    5
+     6    0    0    0    0    2    0    0
+
+Accuracy =  0.266 
+
+              0     1     2     3     4     5   6
+Precision 0.001 0.028 0.036 0.455 0.424 0.180   0
+Recall    0.143 0.157 0.431 0.405 0.112 0.011   0
+F1        0.002 0.048 0.066 0.429 0.177 0.021 NaN
+
+2 layers, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    5   15  269  572  104   48   11
+     1    0    0  104  142   26   13    0
+     2   12  136 2022 1669  269   80   15
+     3    5   60 1213 3251  908  499  115
+     4    0    3  130  488  220  176   25
+     5    0    0   10   41   14   22    2
+     6    0    0    0    2    0    0    0
+
+Accuracy =  0.435 
+
+              0   1     2     3     4     5   6
+Precision 0.005   0 0.481 0.537 0.211 0.247   0
+Recall    0.227   0 0.539 0.527 0.143 0.026   0
+F1        0.010 NaN 0.509 0.532 0.170 0.047 NaN
+
+2 layers, width 3
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    5   12   17  207  113  573   97
+     1    2    3    1   80   55  112   32
+     2   11   34   42 1934  418 1510  254
+     3    7   42   37  920  639 3251 1155
+     4    1    4    7  120   65  512  333
+     5    0    0    0   10    5   47   27
+     6    0    0    0    0    0    2    0
+
+Accuracy =  0.085 
+
+              0     1     2     3     4     5   6
+Precision 0.005 0.011 0.010 0.152 0.062 0.528   0
+Recall    0.192 0.032 0.404 0.281 0.050 0.008   0
+F1        0.010 0.016 0.020 0.197 0.056 0.015 NaN
+
+2 layers, width 3, repeated 
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    8   46   11  263  567  128    1
+     1    0   22    4   91  136   32    0
+     2   61  118   96 2113 1516  299    0
+     3   27  153   74 1262 3147 1385    3
+     4    1    9    7  149  469  407    0
+     5    0    1    1   10   42   35    0
+     6    0    0    0    0    2    0    0
+
+Accuracy =  0.149 
+
+              0     1     2     3     4     5   6
+Precision 0.008 0.077 0.023 0.209 0.450 0.393   0
+Recall    0.082 0.063 0.497 0.325 0.080 0.015   0
+F1        0.014 0.069 0.044 0.254 0.136 0.029 NaN
+
+The accuracy of 43.5% for 2 layers, width 2, is the highest we have seen so far.  The accuracy decreased greatly when the layer width was increased from 2 to 3, but it was not consistent.  That error went away when repeated.  But the accuracy was still very bad.  Could it have been overfitted?  I will examine overfitting in the next few lines by running the training data through the nn model and seeing how much it diverges from the test data.
+
+I'll repeat the 1 layer width 5 (0.234) and 2 layers width 3 (0.149).
+
+```{r}
+training2 <- training
+if(max(training2$CRTime)<2){
+  training2$CRTime <- round(training2$CRTime*ratio,1)
+}
+unique(training2$CRTime)
+```
+
+
+```{r}
+probs = predict(nn, newdata = training2)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+training2$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+#training2$scores = apply(probs, 1, which.max)
+#training2$scores = ifelse(training2$scores == 1, 'setosa', ifelse(training2$scores == 2, 'versicolor', 'virginica'))
+head(training2)
+unique(training2$scores)
+```
+```{r}
+print_metrics(training2, 'CRTime')   
+```
+The accuracy only increased from 0.234 to 0.237 for 1 layer, width 5.  Overfitting was not a problem there.  But for 2 layers, width 3, the accuracy increased from 0.149 to 0.276.  The 2 layer model must have overfitted.  It worked much better on training data than test data.  But even the predictions for training data are disappointingly inaccurate.
+
+I want to repeat it by setting the training data to the first 3 weeks and the test data to the last 2.  This seems more typical of a real-world experiment, where one has past data and wants to predict future data.
+
+I am also removing the MonthWeek column because it has resulted in bad performance.
+
+
+```{r}
+dummies = dummyVars(duration ~ CRTime + defsite.x + groupname.x + type.x + WeekDay + as.character(LoginHour), data = SessionStartEnd7)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd7))
+names(Session_dummies)
+```
+
+
+
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = SessionStartEnd7$MonthWeek %in% c(1,2,3)
+training = Session_dummies[partition,] # Create the training sample
+dim(training)
+test = Session_dummies[!partition,] # Create the test sample
+dim(test)
+head(test)
+
+# the number of training and test samples has been reduced to only 25392 from 26764
+
+```
+
+
+```{r}
+
+#num_cols = c('CRTime','duration')
+#preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+head(training[,"CRTime"])
+ratio <- max(training[,"CRTime"])
+ratio
+training[,"CRTime"] <- training[,"CRTime"]/ratio
+test[,"CRTime"] = test[,"CRTime"]/ratio
+head(training[,"CRTime"])
+range(training$CRTime)
+
+```
+
+
+```{r}
+nn <- neuralnet(CRTime ~ ., data=training, hidden=c(1), linear.output = FALSE)
+
+plot(nn)
+```
+```{r}
+if(max(test$CRTime)<2){
+  test$CRTime <- round(test$CRTime*ratio,1)
+}
+unique(test$CRTime)
+
+probs = predict(nn, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+test$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+#head(test)
+unique(test$scores)
+table(test$scores)
+```
+
+```{r}
+print_metrics(test, 'CRTime')   
+```
+
+1 layer, width 2
+
+    Predicted
+Actual    0    1    2    3    4    5    6
+     0    9  181  156  153   51    7    2
+     1    3   70   49   43   14    5    0
+     2   86 1540  569  536   70   27    1
+     3   57 1003 1122 1190  581  165    3
+     4    4  107  139  170  164   63    0
+     5    0    6    5   14   10    7    0
+
+Accuracy =  0.24 
+
+              0     1     2     3     4     5
+Precision 0.016 0.380 0.201 0.289 0.253 0.167
+Recall    0.057 0.024 0.279 0.565 0.184 0.026
+F1        0.025 0.045 0.234 0.382 0.213 0.044
+     
+1 layer, width 5
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    1    7  135  139  188   55   34
+     1    0    0   52   50   53   18   11
+     2    2   96 1092  778  667  131   63
+     3    1   55  703  949 1408  591  414
+     4    0    6   65  114  203  141  118
+     5    0    0    4    8   12    5   13
+
+Accuracy =  0.268 
+
+              0   1     2     3     4     5
+Precision 0.002   0 0.386 0.230 0.314 0.119
+Recall    0.250   0 0.532 0.466 0.080 0.005
+F1        0.004 NaN 0.448 0.308 0.128 0.010
+
+2 layers, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    1  170  179  115   88    4    2
+     1    0   70   50   40   22    1    1
+     2    8 1652  469  569  121   10    0
+     3   17  927 1145 1126  883   18    5
+     4    0   86  162  160  233    3    3
+     5    0    3    3   15   20    0    1
+
+Accuracy =  0.227 
+
+              0     1     2     3     4   5
+Precision 0.002 0.380 0.166 0.273 0.360   0
+Recall    0.038 0.024 0.234 0.556 0.170   0
+F1        0.003 0.045 0.194 0.366 0.231 NaN
+     
+
+The performance seems worse than before.  All accuracies are in the 20% range, not the 40% range anymore.
+
+How would the performance be if we only looked at day of the week and hour, and ignore everything else?
+
+```{r}
+dummies = dummyVars(duration ~ CRTime + WeekDay + as.character(LoginHour), data = SessionStartEnd7)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd7))
+names(Session_dummies)
+```
+
+
+
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = SessionStartEnd7$MonthWeek %in% c(1,2,3)
+training = Session_dummies[partition,] # Create the training sample
+dim(training)
+test = Session_dummies[!partition,] # Create the test sample
+
+# the number of training and test samples has been reduced to only 25392 from 26764
+
+```
+
+
+```{r}
+
+#num_cols = c('CRTime','duration')
+#preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+head(training[,"CRTime"])
+ratio <- max(training[,"CRTime"])
+ratio
+training[,"CRTime"] <- training[,"CRTime"]/ratio
+test[,"CRTime"] = test[,"CRTime"]/ratio
+head(training[,"CRTime"])
+range(training$CRTime)
+
+```
+
+
+```{r}
+nn <- neuralnet(CRTime ~ ., data=training, hidden=c(2), linear.output = FALSE)
+
+plot(nn)
+```
+```{r}
+if(max(test$CRTime)<2){
+  test$CRTime <- round(test$CRTime*ratio,1)
+}
+
+probs = predict(nn, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+test$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+unique(test$scores)
+table(test$scores)
+```
+
+```{r}
+print_metrics(test, 'CRTime')   
+```
+
+1 layer, width 2
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0   42  115  173  157   32   12   28
+     1   18   54   45   41   15    1   10
+     2  217  545  890  878  127   54  118
+     3  296  675 1277 1324  224   94  231
+     4   30   71  200  269   31   12   34
+     5    2    5   13   18    3    1    0
+
+Accuracy =  0.279 
+
+              0     1     2     3     4     5
+Precision 0.075 0.293 0.315 0.321 0.048 0.024
+Recall    0.069 0.037 0.343 0.493 0.072 0.006
+F1        0.072 0.065 0.328 0.389 0.057 0.009
+
+1 layer, width 5
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    9    3   19  308  177   38    5
+     1    3    4    8   93   65    9    2
+     2   42   16   80 1608  942  131   10
+     3   68   26  113 2151 1472  255   36
+     4   10    1    9  315  279   31    2
+     5    1    0    1   18   21    1    0
+
+Accuracy =  0.301 
+
+              0     1     2     3     4     5
+Precision 0.016 0.022 0.028 0.522 0.431 0.024
+Recall    0.068 0.080 0.348 0.479 0.094 0.002
+F1        0.026 0.034 0.052 0.499 0.155 0.004
+
+2 layers, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0   14   42  116  157  119   52   59
+     1    9   19   32   53   35   18   18
+     2   68  173  536  883  665  241  263
+     3   87  200  679 1260  958  436  501
+     4    7   11   93  210  177   78   71
+     5    1    1    3   12   14    5    6
+
+Accuracy =  0.24 
+
+              0     1     2     3     4     5
+Precision 0.025 0.103 0.189 0.306 0.274 0.119
+Recall    0.075 0.043 0.367 0.489 0.090 0.006
+F1        0.038 0.060 0.250 0.376 0.135 0.011
+
+The accuracy seems to be slightly better with less information.  Now our highest accuracy is in the 30s instead of the 20s.
+
+I wanted to include the userids in the input layer to the neural network, but the program was too slow to execute.  It would have been possible with tensorflow.  We can generate the dummy variables and see that there are very many of them.  I have commented out the neural network code, because it takes too long to execute and I do not want to stall your computer.
+
+
+
+
+```{r}
+dummies = dummyVars(duration ~ CRTime + userid.x + defsite.x + groupname.x + type.x + WeekDay + as.character(LoginHour), data = SessionStartEnd7)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd7))
+names(Session_dummies)
+```
+
+
+
+  ```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = SessionStartEnd7$MonthWeek %in% c(1,2,3)
+training = Session_dummies[partition,] # Create the training sample
+dim(training)
+test = Session_dummies[!partition,] # Create the test sample
+dim(test)
+head(test)
+
+# the number of training and test samples has been reduced to only 25392 from 26764
+
+```
+
+
+  ```{r}
+
+#num_cols = c('CRTime','duration')
+#preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+head(training[,"CRTime"])
+ratio <- max(training[,"CRTime"])
+ratio
+training[,"CRTime"] <- training[,"CRTime"]/ratio
+test[,"CRTime"] = test[,"CRTime"]/ratio
+head(training[,"CRTime"])
+range(training$CRTime)
+
+```
+
+I've skipped this modeling step because it takes too long to execute.
+
+  ```{r}
+nn <- neuralnet(CRTime ~ ., data=training, hidden=c(1), linear.output = FALSE)
+
+plot(nn)
+```
+
+  ```{r}
+if(max(test$CRTime)<2){
+  test$CRTime <- round(test$CRTime*ratio,1)
+}
+unique(test$CRTime)
+```
+
+
+  ```{r}
+probs = predict(nn, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+test$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+head(test)
+unique(test$scores)
+table(test$scores)
+```
+
+  ```{r}
+print_metrics(test, 'CRTime')   
+```
+
+
+That did not work because it took too long.  I will now try an SVM.
+  
+```{r Libraries for SVM}
+
+library(caret)
+library(repr)
+library(e1071)
+library(cluster)
+library(MASS)
+
+```
+
+```{r}
+training <- SessionStartEnd7[SessionStartEnd7$MonthWeek %in% c(1,2,3),]
+test <- SessionStartEnd7[SessionStartEnd7$MonthWeek %in% c(4,5),]
+
+```
+
+First I will only use login hour and day of the week, just like the last neural network above.
+
+```{r SVM predictor of site}
+                                                                                                      
+svm_mod = svm(factor(CRTime) ~ as.character(LoginHour) + as.character(WeekDay), data = training, scale = FALSE, type = 'C-classification')
+                                                                                                        
+
+test[,'scores'] = predict(svm_mod, newdata = test)
+test[1:5,]
+```
+
+                                                                                                        
+```{r evaluation}
+print_metrics = function(df, label){
+# Compute and print the confusion matrix
+cm = as.matrix(table(Actual = df$CRTime, Predicted = df$scores))
+print(cm)
+                                                                                            
+## Compute and print accuracy 
+accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+cat('\n')
+cat(paste('Accuracy = ', as.character(accuracy)), '\n \n')                           
+                                                                                                          
+## Compute and print precision, recall and F1
+precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+metrics = sapply(c(precision, recall, F1), round, 3) 
+metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))       
+#metrics <- metrics[1:3,]
+                                                                                                        dimnames(metrics) <- list(c('Precision', 'Recall', 'F1'), unique(df$CRTime[order(df$CRTime)]))      
+                                                                                                          print(metrics)
+                                                                                                        
+#  paste(cat("Precision: ",precision,"\nrecall: ",recall,"\nF1: ",F1,"\n"))
+}  
+                                                                                                        print_metrics(test, 'CRTime')   
+```
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    0    0   37  522    0    0    0
+     1    0    0   18  166    0    0    0
+     2    0    0  200 2629    0    0    0
+     3    0    0  252 3869    0    0    0
+     4    0    0   13  634    0    0    0
+     5    0    0    1   41    0    0    0
+
+Accuracy =  0.485 
+ 
+            0   1     2     3   4   5
+Precision   0   0 0.071 0.939   0   0
+Recall    NaN NaN 0.384 0.492 NaN NaN
+F1        NaN NaN 0.119 0.646 NaN NaN
+
+The SVM did a surprisingly good job of predicting duration, in large part because it only guessed bin #"2" and "3" which is where the actual results were most concentrated.  It achieved 48.5% accuracy.
+
+Let's see if it can handle userids as well.  As it turns out, it can.  And the accuracy improves to 52.6%.
+
+```{r}
+SessionStartEnd8 <- SessionStartEnd7
+for(val in c("userid.x","CRTime","LoginHour","WeekDay")){
+  print(val)
+  print(SessionStartEnd8[1:5,val])
+  SessionStartEnd8[,val] <- factor(SessionStartEnd8[,val])
+}
+training <- SessionStartEnd8[SessionStartEnd8$MonthWeek %in% c(1,2,3),]
+test <- SessionStartEnd8[SessionStartEnd8$MonthWeek %in% c(4,5),]
+
+```
+This section took too long to execute on RStudio Cloud, but it works ok offline.  I have tabbed/commented it out for your convenience.
+
+  ```{r SVM predictor of site}
+
+svm_mod = svm(factor(CRTime) ~ as.character(LoginHour) + as.character(WeekDay) + userid.x, data = training, scale = FALSE, type = 'C-classification')
+                                                                                                        
+table(unique(test$userid.x) %in% unique(training$userid.x))
+table(unique(test$LoginHour) %in% unique(training$LoginHour))
+table(unique(test$WeekDay) %in% unique(training$WeekDay))
+table(unique(test$CRTime) %in% unique(training$CRTime))
+test <- test[(test$userid.x) %in% unique(training$userid.x),]
+#8382, 8302
+
+#svm_mod[1:30]
+
+#predict(svm_mod, newdata = test[1,])
+test[,'scores'] = predict(svm_mod, newdata = test)
+test[1:10,]
+```
+
+                                    
+  ```{r evaluation}
+print_metrics = function(df, label){
+# Compute and print the confusion matrix
+cm = as.matrix(table(Actual = df$CRTime, Predicted = df$scores))
+print(cm)
+                                                                                            
+## Compute and print accuracy 
+accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+cat('\n')
+cat(paste('Accuracy = ', as.character(accuracy)), '\n \n')                           
+                                                                                                          
+## Compute and print precision, recall and F1
+precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+metrics = sapply(c(precision, recall, F1), round, 3) 
+metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))  
+#metrics <- metrics[1:3,]
+dimnames(metrics) <- list(c('Precision', 'Recall', 'F1'), c("0","1","2","3","4","5","6"))  
+                                                                                                          print(metrics)
+                                                                                                        
+#  paste(cat("Precision: ",precision,"\nrecall: ",recall,"\nF1: ",F1,"\n"))
+}  
+                                                                                                        print_metrics(test, 'CRTime')   
+```
+
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    0    0    5  542    0    0    0
+     1    0    0    1  180    0    0    0
+     2    0    0  320 2478    0    0    0
+     3    0    0   44 4044    0    0    0
+     4    0    0    8  638    0    0    0
+     5    0    0    1   41    0    0    0
+     6    0    0    0    0    0    0    0
+
+Accuracy =  0.526 
+
+
+The accuracy is probably higher because the program is seeing individual users and their patterns of behavior.  I was expecting the predicted time to be spread out, but it guessed everyone was in bin "2" or "3".
+
+Let's see what bins each user actually tends to fall into:
+
+```{r}
+for(val in UniqueUser2$userid[30:40]){
+  cat("\n",val)
+  print(table(SessionStartEnd8$CRTime[SessionStartEnd8$userid.x == val]))
+}
+```
+From a quick glance, we can see that user session durations tend to fall into bin "2" or "3" for each user.  No wonder the SVM always predicts "2" or "3."  Let's look at this information for all users.
+
+```{r}
+UniqueUser2$DurBin <- NA
+for(val in UniqueUser2$userid){
+  #print(val)
+  TAB <- table(SessionStartEnd8$CRTime[SessionStartEnd8$userid.x == val])
+  #print(TAB)
+  TAB <- as.matrix(TAB)
+  UniqueUser2[UniqueUser2$userid == val,"DurBin"] <- which.max(TAB)-1
+}
+cat("Number of users in each duration bin:\n")
+table(UniqueUser2$DurBin)
+```
+0   1   2   3   4 
+9   8 215 337   3 
+
+This table demonstrates that the vast majority of userids have a plurality of their session durations in bin "2" and bin "3."  As a reminder, bin "2" spans 2 - 16 minutes, and bin "3" spans 17-81 minutes.  17 users have their greatest number of sessions in bins "0" and "1", meaning their sessions are under 2 minutes.  3 users have their greatest number of sessions in the 82-256 minute range.  (215+337)/(9+8+215+337+3) = 96.5% of users have their session durations in bin 2 or 3, so it is reasonable that an SVM would guess bin 2 or 3 for everybody.
+
+Let's see if the training dataset was any different from the full dataset:
+
+```{r}
+UniqueUser2$DurBin <- 3 # Initialize all users to 3, which is the most common value
+for(val in unique(training$userid.x)){
+  #print(val)
+  TAB <- table(SessionStartEnd8$CRTime[SessionStartEnd8$userid.x == val])
+  #print(TAB)
+  TAB <- as.matrix(TAB)
+  UniqueUser2[UniqueUser2$userid == val,"DurBin"] <- which.max(TAB)-1
+}
+cat("Number of training users in each duration bin:\n")
+table(UniqueUser2$DurBin)
+```
+(202+324)/542 = 97% of users in the training dataset fell in bins 2 and 3.  The training dataset represented the whole dataset very well. 
+                                                                                                        
+What would happen if we just predicted all future duration bins simply by past duration bins?  This is without any regard to login time, day of the week, job, site, or anything else.  Would the accuracy be better than the SVM?  Let's try it.
+
+
+```{r}
+training <- SessionStartEnd7[SessionStartEnd8$MonthWeek %in% c(1,2,3),]
+test <- SessionStartEnd7[SessionStartEnd8$MonthWeek %in% c(4,5),]
+
+```
+
+
+```{r non-ML predictor of duration bin}
+
+#svm_mod = svm(factor(CRTime) ~ as.character(LoginHour) + as.character(WeekDay) + userid.x, data = training, scale = FALSE, type = 'C-classification')
+                                                                                                        
+table(unique(test$userid.x) %in% unique(training$userid.x))
+table(unique(test$LoginHour) %in% unique(training$LoginHour))
+table(unique(test$WeekDay) %in% unique(training$WeekDay))
+table(unique(test$CRTime) %in% unique(training$CRTime))
+#test <- test[(test$userid.x) %in% unique(training$userid.x),]
+#8382, 8302
+
+#svm_mod[1:30]
+
+#predict(svm_mod, newdata = test[1,])
+test[,'scores'] = 3 #initialize all scores to bin 3.  If a user cannot be found in training, his "test" score will be "3"
+for(val in 1:length(test$userid.x)){
+  #print(val)
+  #print(UniqueUser2[UniqueUser2$userid == test[val,"userid.x"],"DurBin"])
+  test[val,'scores'] <- UniqueUser2[UniqueUser2$userid == test[val,"userid.x"],"DurBin"]
+}
+#predict(svm_mod, newdata = test)
+#test[1:10,]
+table(test$scores)
+```
+
+                                                                      
+```{r evaluation}
+print_metrics = function(df, label){
+# Compute and print the confusion matrix
+cm = as.matrix(table(Actual = df$CRTime, Predicted = df$scores))
+#print(cm)
+#print(dim(cm)[1])
+#print(dim(cm)[2])
+while(dim(cm)[1] > dim(cm)[2]){
+  cm <- cbind(cm,rep(0,dim(cm)[1]))
+}
+print(cm)
+                                                                                            
+## Compute and print accuracy 
+accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+cat('\n')
+cat(paste('Accuracy = ', as.character(accuracy)), '\n \n')                           
+                                                                                                          
+## Compute and print precision, recall and F1
+precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+metrics = sapply(c(precision, recall, F1), round, 3) 
+metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))  
+#metrics <- metrics[1:3,]
+dimnames(metrics) <- list(c('Precision', 'Recall', 'F1'), c("0","1","2","3","4","5"))  
+                                                                                                          print(metrics)
+                                                                                                        
+#  paste(cat("Precision: ",precision,"\nrecall: ",recall,"\nF1: ",F1,"\n"))
+}  
+   
+
+print_metrics(test, 'CRTime')   
+```
+[1] 5
+   0 1    2    3  4    
+0  2 0  128  415  2 0 0
+1  5 1   83   92  0 0 0
+2  8 0 2069  716  5 0 0
+3 12 2  683 3358 33 0 0
+4  0 0   62  562 22 0 0
+5  0 0    4   32  6 0 0
+6  0 0    0    0  0 0 0
+
+Accuracy =  0.657 
+ 
+              0     1     2     3     4   5   6
+Precision 0.004 0.006 0.739 0.821 0.034   0 NaN
+Recall    0.074 0.333 0.683 0.649 0.324 NaN NaN
+F1        0.007 0.011 0.710 0.725 0.062 NaN NaN
+
+This is amazing.  The highest accuracy model I can come up with simply sees how long a user tends to be logged on, then estimates that the user will be logged on for that length of time for all future logins regardless of time, day of the week, or any other factor.  It is 65.7% accurate.
+
+      
+### Part 2 (Research Methods)
+
+
+
+3. Come up with your own question that involves principles of data science research and is relevant to the business. Write it out, explain your rationale, and solve.  
+
+
+Suggest a way to reduce user load.  Find out which users create the most user unnecessary load using appropriate statistical methods and suggest steps forward.
+
+I will focus on how many duplicated and simultaneous sessions we have over time, and how much risk they pose of exceeding the threshold of 90 limited and authorized users at one time.  I'll find which users give us the most simultaneous sessions, and what patterns they show over time.
+
+We can see a significant number of simultaneous/duplicated sessions from our earlier dataframe, 6460 out of 27674.  Let's look at the properties of unique, simultaneous, and duplicated sessions by other variables.  Maybe some patterns will stand out.
+
+```{r}
+
+plot_bars = function(df, catcols){
+  options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+  temp0 = df
+  temp1 = df[df$Simultaneous == 1,]
+  temp2 = df[df$DupSessionid == 1,]
+  for(col in cat_cols){
+    p1 = ggplot(temp0, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for all sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    p2 = ggplot(temp1, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for simultaneous sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    p3 = ggplot(temp2, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for duplicated sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    grid.arrange(p1,p2,p3, nrow = 1)
+  }
+}
+
+
+cat_cols = c('WeekDay', 'LoginHour', 'duration', 'attemptresult.y', 'groupname.x','defsite.x','type.x')
+plot_bars(SessionStartEnd4, cat_cols) 
+
+
+```
+
+1. Simultaneous and duplicated sessions make up a higher proportion of sessions on weekends.
+2. Simultanoues and duplicated sessions make up a higher proportion of sessions from about 5pm to 5am
+3. The duration of normal sessions is low, but simultaneous and duplicated sessions have a peak at 120-121 minutes (as demonstrated further below)
+4. Syslogouts make up a small minority of unique session logouts, a high proportion of simultanous session logouts, and an overwhelming majority of duplicate session logouts.  Normal logouts and timeouts are somewhat balanced with each other in all 3 types of sessions.
+5. Schedulers have more than their fair share of simultaneous sessions when compared to their total sessions.  But in general there are no major differences in the proportion of simultaneous or duplicated sessions by job type.
+6. There is not a major difference in the proportion of simultaneous or duplicated sessions by job site.
+7. There is not a major difference in the proportion of simultaneous or duplicated sessions by user type (authorized, express, or limited)
+
+Below, we can see that the simultaneous and duplicated sessions tend to be 120-121 minutes long, while normal sessions are much shorter on average.  Curiously, unique sessions also have a local maximum at 120-122 minutes
+
+```{r metrics}
+cat("Total sessions\n")
+table(SessionStartEnd4[SessionStartEnd4$duration < 153,"duration"])
+
+cat("\nDuplicate Sessions peak at 120-121 minutes\n")
+table(SessionStartEnd4[SessionStartEnd4$duration < 200 & SessionStartEnd4$DupSessionid == 1,"duration"])
+# The DupSessionid duration peaks at 120-121 minutes
+
+cat("\nSimultaneous Sessions also have a local maximum at 120-121 minutes\n")
+table(SessionStartEnd4[SessionStartEnd4$duration < 200 & SessionStartEnd4$Simultaneous == 1,"duration"])
+
+
+```
+```{r}
+options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+  temp0 = SessionStartEnd4[SessionStartEnd4$attemptresult.y == "LOGOUT",]
+  temp1 = SessionStartEnd4[SessionStartEnd4$attemptresult.y == "SYSLOGOUT",]
+  temp2 = SessionStartEnd4[SessionStartEnd4$attemptresult.y == "TIMEOUT",]
+
+    p1 = ggplot(temp0, aes_string("duration")) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', "duration", '\n for LOGOUT sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    p2 = ggplot(temp1, aes_string("duration")) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', "duration", '\n for SYSLOGOUT sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    p3 = ggplot(temp2, aes_string("duration")) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', "duration", '\n for TIMEOUT sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    grid.arrange(p1,p2,p3, nrow = 1)
+
+```
+It appears that all syslogouts are at least 120 minutes.  Most Logout sessions last very short, and timeout sessions have a bimodel distribution with modes of 0 and about 50 minutes.
+
+Let's get the most important information, which is how many users are logged in throughout the month, and when it is threatening to exceed our licenses.
+
+```{r}
+SessionLog <- data.frame(datetime <- seq.POSIXt(as_datetime(min(SessionStartEnd4$attemptdate.x)), as_datetime(max(SessionStartEnd4$attemptdate.y)), by="min"))
+colnames(SessionLog) <- "datetime"
+
+
+AddCol <- function(vec1, vec2){
+  result <- c()
+    for(val in 1:length(vec2)){
+  result[val] <- length(vec1[vec1 == vec2[val]])
+    }
+#  print(result[1100:1200])
+  return(result)
+  
+}
+```
+
+ 
+```{r}
+
+SessionLog$TotLogin <- AddCol(SessionStartEnd4$attemptdate.x, SessionLog$datetime)
+SessionLog$TotLogout <- AddCol(SessionStartEnd4$attemptdate.y, SessionLog$datetime)
+```
+
+```{r}
+SumUsers <- function(df, j1, j2){
+  result <- rep(0,length(df[,"datetime"]))
+  for(val in 2:length(df[,"datetime"])-1){
+  result[val+1] <- result[val] + df[val,j1] - df[val,j2]
+  }
+  return(result)
+}
+```
+
+
+```{r}
+SessionLog$TotUsers <- SumUsers(SessionLog, "TotLogin", "TotLogout")
+min(SessionLog$TotUsers)
+max(SessionLog$TotUsers)
+```
+The maximum total userload is 102 users.  This may be ok, as long as the authorized + limited users do not exceed 90.  We will find that out in the next few code blocks.
+
+```{r}
+ggplot(SessionLog, aes(x = datetime)) +
+  #geom_point(alpha = 0.2, color = "red") +
+  geom_segment(aes(x = min(datetime), y = 90, xend = max(datetime), yend = 90, color = "red")) +
+  geom_line(aes(y = TotUsers), color="black")  #+
+  #geom_line(aes(y = DupUsers), color="steelblue")
+
+```
+
+```{r}
+SessionLog$AuthLimLogin <- AddCol(SessionStartEnd4$attemptdate.x[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED")], SessionLog$datetime)
+
+SessionLog$AuthLimLogout <- AddCol(SessionStartEnd4$attemptdate.y[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED")], SessionLog$datetime)
+```
+
+```{r}
+SessionLog$AuthLimUsers <- SumUsers(SessionLog, "AuthLimLogin", "AuthLimLogout")
+min(SessionLog$AuthLimUsers)
+max(SessionLog$AuthLimUsers)
+```
+It's nice to see that authorized and limited put together only reach 99, but this is over the limit of 90.  We can delete the duplicate sessions and probably justify it to Maximo, but it would be harder to justify deletion of the simultaneous sessions.
+
+```{r}
+SessionLog$ALDupLogin <- AddCol(SessionStartEnd4$attemptdate.x[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED") & SessionStartEnd4$DupSessionid == 1], SessionLog$datetime)
+
+SessionLog$ALDupLogout <- AddCol(SessionStartEnd4$attemptdate.y[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED") & SessionStartEnd4$DupSessionid == 1], SessionLog$datetime)
+```
+
+```{r}
+SessionLog$ALDupUsers <- SumUsers(SessionLog, "ALDupLogin", "ALDupLogout")
+min(SessionLog$ALDupUsers)
+max(SessionLog$ALDupUsers)
+```
+```{r}
+SessionLog$ALUniqueUsers <- SessionLog$AuthLimUsers - SessionLog$ALDupUsers
+min(SessionLog$ALUniqueUsers)
+max(SessionLog$ALUniqueUsers)
+```
+A maximum of 34 duplicate users were logged in once, which is higher than I expected.  Removing them all brings our maximum user load down from 99 to 91 users, but it is still exceeding the limit of 90.  Therefore it is very important to encourage employees to logout and reduce their individual load on the system.
+
+```{r}
+ggplot(SessionLog, aes(x = datetime)) +
+  #geom_point(alpha = 0.2, color = "red") +
+  geom_segment(aes(x = min(datetime), y = 90, xend = max(datetime), yend = 90, color = "red")) +
+  geom_line(aes(y = ALUniqueUsers), color="black") +
+  geom_line(aes(y = ALDupUsers), color="steelblue")
+
+```
+From the timelines, we can see that we exceeded 90 users on the first Tuesday of the month, and this is the case even when we find and eliminate duplicate sessions.  This makes it important for the company to reduce simultaneous sessions.  We know from the following table that 8.24% of total sessions are duplicates but 23.3% are users with simultaneous sessions.  
+
+The duplicate user baseline is very different.  It almost never goes below about 10, even late at nigh and on weekends.  At off hours, their number often far exceeds the unique sessions.
+
+It is encouraging that in the last 2 and a half weeks of the month, user count never exceeded about 65.  We need to keep watching that, and observe if it goes back up in the first week of April or stays low.
+
+
+
+The simultaneous sessions after eliminating duplicate sessions are 11.4% of the total sessions (Simultaneous2 from earlier).  It is not as bad as 23%, but still not very good.  Assuming only half of their total time overlaps on average, these sessions probably contribute to at least 5% of our user load.  Eliminating them would free up about 5 users and make us somewhat less likely to reach the limit of 90 user licenses.  This would be a business decision, but it might be a good idea to buy more licenses anyway, especially if any growth is planned.
+
+Let's see who are the users with the most simultaneous sessions and duplicate sessions.  Maybe we can find some commonalities or at least send them a notification individually.  We can also talk to them individually and find out what exactly about their work causes them to have multiple sessions.
+
+
+```{r}
+UniqueUser3 <- UniqueUser2
+
+SumSessions <- function(df1,df2,cols){
+  array1 <- c()
+  i <- 1
+  for(val in df1$userid){
+    array1[i] <- (sum(df2[df2$userid.x==val,cols]))
+    i <- i + 1
+  }
+  return(array1)
+}
+
+i <- 1
+for(val in UniqueUser3$userid){
+  UniqueUser3$TotSessions[i] <- length(SessionStartEnd4$userid.x[SessionStartEnd4$userid.x==val])
+  i <- i + 1
+}
+UniqueUser3$SimulSessions <- SumSessions(UniqueUser3,SessionStartEnd4,"Simultaneous")
+UniqueUser3$DupSessionid <- SumSessions(UniqueUser3,SessionStartEnd4,"DupSessionid")
+UniqueUser3$TotTime <-  SumSessions(UniqueUser3,SessionStartEnd4,"duration")
+UniqueUser3$SimulSessions2 <- SumSessions(UniqueUser3,SessionStartEnd4,"Simultaneous2")
+
+UniqueUser3$SimulRatio <- UniqueUser3$SimulSessions/UniqueUser3$TotSessions
+UniqueUser3$DupSesRatio <- UniqueUser3$DupSessionid/UniqueUser3$TotSessions
+UniqueUser3$SimulRatio2 <- UniqueUser3$SimulSessions2/UniqueUser3$TotSessions
+
+```
+
+
+From a quick glance at the charts, it appears that both LA and TX have a fair proportion of the users with too many simultaneous sessions.  But there are a few jobs that are overrepresented in users with too many simultaneous sessions.  These jobs appear to be storeroom clerk, scheduler, planner, and contract supervisor.
+```{r}
+hist(UniqueUser3$SimulSessions2)
+mean(UniqueUser3$SimulSessions2)
+sd(UniqueUser3$SimulSessions2)
+quantile(UniqueUser3$SimulSessions2)
+
+mean(UniqueUser3$SimulSession2s)+sd(UniqueUser3$SimulSessions2)
+```
+```{r}
+ggplot(data = UniqueUser3, aes(x=1,y=SimulRatio2))+
+         geom_boxplot()
+ggplot(data = UniqueUser3, aes(x=1,y=SimulSessions2))+
+         geom_boxplot()
+
+```
+We see a lot of outliers with extremely high simultaneous session counts (these include duplicate sessions).  While the ratio of simultaneous sessions is interesting to look at, it is not a good use of time to talk to a user simply because he has a 100% simultaneous session ratio.  Many of these users only had 1 session in the entire month, and do not place much user load on the system.  I will use Tukey's fence to determine outliers with respect to simultaneous session counts.  The test is the Q3 quartile point plus 1.5 times the inner quartile range (which is Q3 - Q1).
+
+```{r}
+IQR <- quantile(UniqueUser3$SimulSessions2)[4] - quantile(UniqueUser3$SimulSessions2)[2]
+UpperOutCut <- quantile(UniqueUser3$SimulSessions2)[4] + 1.5*IQR
+cat("Outlier cutoff for simultaneous sessions.  All users with more than this many sessions will be designated high use\n\n")
+UpperOutCut
+
+```
+
+
+
+```{r}
+hist(UniqueUser3$SimulRatio2)
+mean(UniqueUser3$SimulRatio2)
+sd(UniqueUser3$SimulRatio2)
+quantile(UniqueUser3$SimulRatio2)
+
+mean(UniqueUser3$SimulRatio2)+sd(UniqueUser3$SimulRatio2)
+```
+```{r}
+
+UniqueUser3$HighSimulUser <- as.numeric(UniqueUser3$SimulSessions2 > UpperOutCut)
+summary(UniqueUser3)
+
+```
+
+It appears that 12.2% of users were designated HighSimulUser.
+
+
+```{r}
+table(UniqueUser3$HighSimulUser)
+
+```
+There are 70 users with an excessive number of simultaneous sessions and 502 without.  Let's see which job categories have the most users with excessive simultaneous sessions.
+
+```{r}
+Jobs <- data.frame(row.names = unique(UniqueUser3$groupname))
+for(val in 1:length(row.names(Jobs))){
+  Jobs$total[val] <- sum(as.numeric(UniqueUser3$groupname == row.names(Jobs)[val]))
+}
+for(val in 1:length(row.names(Jobs))){
+  Jobs$HighSim[val] <- sum(as.numeric(UniqueUser3$groupname[UniqueUser3$HighSimulUser == TRUE] == row.names(Jobs)[val]))
+}
+Jobs$ratio <- round(Jobs$HighSim/Jobs$total,3)
+head(Jobs[order(Jobs$ratio, decreasing = TRUE),],10)
+
+
+```
+
+
+Here we can see the jobs that have the highest rates of simultaneous sessions.  100% of the contract planners had high simultaneous sessions.  75% of the 8 schedulers had too many simultaneous sessions.  It would be worthwhile to talk to the few highest users and see what about their work results in such high number of simultaneous sessions.  The individual users with the most simultaneous sessions are listed below.  The top 5 of them are schedulers, and they alone account for about 1200 of the roughly 6000 simultaneous sessions of the month, or 20% of them.
+
+```{r}
+head(UniqueUser3[order(UniqueUser3$SimulSessions2, decreasing = TRUE),c(1,3,4,9:10)],50)
+```
+
+
+```{r}
+
+cat("Total users by site:")
+table(UniqueUser3$defsite)
+cat("\nTotal users by job:")
+table(UniqueUser3$groupname)
+cat("\nHigh simultaneous users by site:")
+table(UniqueUser3$defsite[UniqueUser3$HighSimulUser == TRUE])
+cat("\nHigh simultaneous users by job:")
+table(UniqueUser3$groupname[UniqueUser3$HighSimulUser == TRUE])
+```
+From this we can see that 45 users from LA and 25 from TX have a high number of simultaneous sessions, not including duplicate sessions.
+
+```{r}
+plot_bars = function(df, cat_cols){
+  options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+  temp0 = df
+  temp1 = df[df$HighSimulUser == 1,]
+
+  for(col in cat_cols){
+    p1 = ggplot(temp0, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for all users')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    p2 = ggplot(temp1, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for users with a high number of simultaneous sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    grid.arrange(p1,p2, nrow = 1)
+  }
+}
+
+cols <- c("defsite","groupname")
+plot_bars(UniqueUser3,cols)
+
+
+```
+
+We should work with the users who have the high user load to reduce it, now that we have identified who they are.  
+
+The 90 license threshold was exceeded once at the beginning of the month, but user load decreased to about 65 for the last half of the month.  If it remains at 65 in April, then we may not need to buy additional user licences.  But if it gets close to 90 again, our business should consider buying more licenses.
+
+
+
+
+### Submissions
+
+Because we all will be working with the same data, you will only need to send me your new Markdown file. Please save it as *lastname_firstinitial_Project3.Rmd* and email to me directly at [jonathan.fowler@quickstart.com](mailto:jonathan.fowler@quickstart.com). Submissions must be made by **June 19 2020 11:59PM ET**. 
+
+### Resources 
+
+#### Machine Learning
+<https://github.com/twitter/AnomalyDetection> <br>
+<https://towardsdatascience.com/tidy-anomaly-detection-using-r-82a0c776d523?gi=e8aa74571226> <br>
+<https://www.datacamp.com/community/tutorials/detect-anomalies-anomalize-r> <br>
+
+#### Research Methods
+Many basic functions of statistical analysis are in the R package "psych" found at <https://personality-project.org/r/index.html>
+
+#### R Markdown
+For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
