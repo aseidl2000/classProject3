@@ -1,0 +1,2033 @@
+---
+  title: "QS Data Science Bootcamp Project 3 Instructions"
+author: "Jonathan Fowler"
+date: "6/8/2020"
+output: html_document
+---
+
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+For this project, you will continue your role as a developer on the business intelligence team from the previous project. You are to choose one question from Part 1 and one question from Part 2; you are also to complete all questions in Part 3. You will place your write-up, code, and results in a new R Markdown document.
+
+### The Data
+
+The data file is included in this project. The filename is **PROJECT3_DATA.csv**.
+
+| Field     | Description   |
+  |-----------|--------------|
+  | attemptdate        | Date and Time of event          |
+  | attemptresult | LOGIN, LOGOUT, TIMEOUT, or SYSLOGOUT |
+  | userid  | The user triggering the event |
+  | type      | User type, e.g., AUTHORIZED |
+  | defsite      | User site, e.g., LA or TX |
+  | groupname      | User group, e.g., IT ANALYST |
+  | maxsessionuid   | Unique identifer for a session.|
+  
+```{r Importing data from csv}
+rm(list=ls()) # remove any previous data
+#if("installr" %in% rownames(installed.packages()) == FALSE) {install.packages("installr")}
+#if("devtools" %in% rownames(installed.packages()) == FALSE) {install.packages("devtools")}
+#install --- if("Rtools" %in% rownames(installed.packages()) == FALSE) {install.packages("Rtools")}
+if("rmarkdown" %in% rownames(installed.packages()) == FALSE) {install.packages("rmarkdown")}
+if("lubridate" %in% rownames(installed.packages()) == FALSE) {install.packages("lubridate")}
+#if("stringr" %in% rownames(installed.packages()) == FALSE) {install.packages("stringr")}
+if("dplyr" %in% rownames(installed.packages()) == FALSE) {install.packages("dplyr")}
+if("ggplot2" %in% rownames(installed.packages()) == FALSE) {install.packages("ggplot2")}
+if("gridExtra" %in% rownames(installed.packages()) == FALSE) {install.packages("gridExtra")}
+if("caret" %in% rownames(installed.packages()) == FALSE) {install.packages("caret")}
+if("lattice" %in% rownames(installed.packages()) == FALSE) {install.packages("lattice")}
+if("repr" %in% rownames(installed.packages()) == FALSE) {install.packages("repr")}
+if("e1071" %in% rownames(installed.packages()) == FALSE) {install.packages("e1071")}
+if("MLmetrics" %in% rownames(installed.packages()) == FALSE) {install.packages("MLmetrics")}
+if("cluster" %in% rownames(installed.packages()) == FALSE) {install.packages("cluster")}
+if("MASS" %in% rownames(installed.packages()) == FALSE) {install.packages("MASS")}
+#if("ez" %in% rownames(installed.packages()) == FALSE) {install.packages("ez")} crashes
+if("randomForest" %in% rownames(installed.packages()) == FALSE) {install.packages("randomForest")}
+if("nnet" %in% rownames(installed.packages()) == FALSE) {install.packages("nnet")}
+#if("RSNNS" %in% rownames(installed.packages()) == FALSE) {install.packages("RSNNS")}
+if("neuralnet" %in% rownames(installed.packages()) == FALSE) {install.packages("neuralnet")}
+if("keras" %in% rownames(installed.packages()) == FALSE) {install.packages("keras")}
+if("tfestimators" %in% rownames(installed.packages()) == FALSE) {install.packages("tfestimators")}
+if("tensorflow" %in% rownames(installed.packages()) == FALSE) {install.packages("tensorflow")}
+
+
+#library(devtools)
+#library(Rtools)
+#library(installr)
+#updateR()
+library(rmarkdown)
+library(lubridate)
+#library(stringr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+#library(caret)
+#library(repr)
+#library(e1071)
+#library(MLmetrics)
+#library(cluster)
+#library(MASS)
+#library(nnet)
+# library(ez) crashes
+
+
+```
+
+```{r}
+rm(list=ls()) # remove any previous data
+Proj3Data <- read.csv(file = 'PROJECT3_DATA.csv')
+
+```
+
+A significant amount of preprocessing must be done before answering any of the questions.
+
+The following block gathers some basic information on users by creating a new dataframe of unique users.  The program searched through Proj3Data which had 53046 line, and selected unique occurrences of userid, type, site (defsite), and job (groupname).  If any user had more than one type or defsite associated with them, they would appear twice in the UniqueUser data frame.  UniqueUser was 574 lines long.  A further query into the unique users within UniqueUser resulted in 572, lower by 2, which means that 2 users have more than one characteristic over the course of the month.  That characteristic happened to be their job, or groupname.
+
+```{r Gathering basic information on users and data exploration}
+#table(Proj3Data[["defsite"]])
+UniqueUser <- unique(Proj3Data[c("userid","type","defsite","groupname")])
+cat("Unique user rows:\n")
+length(UniqueUser$userid)
+# there are 574 unique rows
+cat("\nUnique users:\n")
+length(unique(UniqueUser$userid))
+# but only 572 unique users
+DupUsers <- UniqueUser[duplicated(UniqueUser$userid),]
+# HBA1629 and HBA1622 appear twice
+UniqueUser2 <- UniqueUser[duplicated(UniqueUser$userid)==FALSE,]
+# The purpose of this loop is to get the first instances of the duplicated rows into DupUsers
+
+
+
+#row.names(UniqueUser) <- UniqueUser$userid
+#UniqueUser[DupUsers,]
+#UniqueUser[UniqueUser$userid == UniqueUser[duplicated(UniqueUser$userid),1]]
+#UniqueUser[(UniqueUser$userid == "HBA1622"| UniqueUser$userid == "HBA1629"),]
+#UniqueUser[UniqueUser$userid %in% (UniqueUser[duplicated(UniqueUser$userid),1])]
+cat("\nUser types:\n")
+table(UniqueUser2$type)
+cat("\nUser locations:\n")
+table(UniqueUser2$defsite)
+cat("\nUser jobs:\n")
+table(UniqueUser2$groupname)
+```
+
+There are 139 Authorized users, 16 Express, and 417 Limited.  
+
+There are 335 unique users in Louisiana, 222 in Texas, and 15 users spread between 3 pipelines in LA, TX, and OK.
+
+
+```{r}
+for(val in DupUsers$userid){
+  #  print(UniqueUser2[UniqueUser2$userid == val,])  
+  DupUsers <- rbind(DupUsers,UniqueUser2[UniqueUser2$userid == val,])  
+}
+
+DupUsers[order(DupUsers$userid),]
+```
+
+Users HBA1622 and HBA1629 had 2 different jobs each over the course of the month.
+
+The next block of code will create a merged table where each row will have a login and logout datestamp.  
+
+```{r}
+names(Proj3Data)[1] <- "attemptdate" #some strange special characters were introduced and had to be corrected
+SessionYMDTime <- Proj3Data
+#SessionUnixTime$attemptdate <- as.numeric(mdy_hm(Proj3Data$attemptdate))
+SessionYMDTime$attemptdate <- mdy_hm(Proj3Data$attemptdate)
+SessionStart <- SessionYMDTime[SessionYMDTime$attemptresult == "LOGIN",]
+SessionEnd <- SessionYMDTime[SessionYMDTime$attemptresult != "LOGIN",]
+SessionStartEnd <- merge(SessionStart, SessionEnd, by = "maxsessionuid")
+
+```
+Now we have a table with all sessions, and a start and end time in minutes.  Next steps will be to clean up the data a bit, delete redundant columns, and check for duplicates.  The redundant columns are shown to be userid.y, type.y, and defsite.y.  Groupname.y may be different from groupname.x in 47 rows, so these rows are kept.
+
+```{r Cleaning}
+for(val in c("userid","type","defsite","groupname")){
+  cat("\n",val)
+  print(table(SessionStartEnd[,paste(val,".y", sep = "")] == SessionStartEnd[,paste(val,".x", sep = "")]))
+}
+```
+This data shows that userid, type, and defsite are always redundant between login and logout.  The logout values for these will be removed, but groupname will stay, because there are 47 cases where the user's groupname changed in the session.  This might be useful to look at, so it will be kept.  Below are the 47 lines where the user's job changed within the session.  The jobs listed are planner, quick reporting user, and maintenance supervisor.
+
+```{r}
+SessionStartEnd[SessionStartEnd$groupname.y != SessionStartEnd$groupname.x,names(SessionStartEnd) %in% c("userid.x","groupname.x","groupname.y")]
+```
+
+Here we'll get rid of the redundant columns
+```{r}
+SessionStartEnd <- SessionStartEnd[,!(names(SessionStartEnd) %in% c("defsite.y","type.y","userid.y"))]
+# drop redundant columns
+```
+
+This next block checks for NA values.  There are none.
+```{r}
+table(complete.cases(SessionStartEnd))
+# See if there are any NAs, incomplete cases.  There are none
+
+```
+
+
+To elaborate on the data, I created new columns to document the properties of each session. These include duration, hour of login, day of the week, and week of the month.  Further below, I will document duplicated sessionids, simultaneous sessionids, and off-hours logins.
+
+
+```{r Session log}
+SessionStartEnd3 <- SessionStartEnd[order(SessionStartEnd$maxsessionuid,SessionStartEnd$attemptdate.y),]
+SessionStartEnd3$duration <- as.numeric(difftime(SessionStartEnd3$attemptdate.y,SessionStartEnd3$attemptdate.x, unit="mins"))
+
+SessionStartEnd3$LoginHour <- hour(SessionStartEnd3$attemptdate.x)
+
+SessionStartEnd3$WeekDay <- wday(SessionStartEnd3$attemptdate.x)
+
+MonthWeekConverter <- function(date){
+  FirstOfMonth <- (paste(as.character(year(date)),"-",as.character(month(date)),"-01 00:00:00",sep=""))
+  offset <- wday(FirstOfMonth) - 1
+  MonthWeek <- ceiling((day(date)+offset)/7)
+  return(MonthWeek)
+}
+
+SessionStartEnd3$MonthWeek <- MonthWeekConverter(SessionStartEnd$attemptdate.x)
+# This may seem a bit too complicated, but it will work for other months more easily if copied over
+
+print("Logins by date")
+for(val in 1:5){
+  print(table(date(SessionStartEnd3[SessionStartEnd3$MonthWeek == val,"attemptdate.x"])))
+}
+#View(SessionStartEnd4[SessionStartEnd4$MonthWeek == 4,"attemptdate.x"])
+
+```
+This is a calendar of logins in March.
+
+The following code shows that there are about 2282 redundant sessionids.
+
+```{r}
+table(duplicated(SessionStartEnd$maxsessionuid))
+```
+DupSessionid will use a 0 or 1 to indicate whether a sessionid was duplicated
+
+```{r}
+SessionStartEnd3$DupSessionid <- as.numeric(duplicated(SessionStartEnd3$maxsessionuid))
+table(SessionStartEnd3$DupSessionid)
+
+```
+
+
+I want to find and make note of simultaneous sessions.  These are sessions where a single user is logged on more than once at the same time, with different sessionids.  These are populated into a new dataframe, SessionStartEnd4, which is organized first by userid.x, then by login timestamp which is attemptdate.x
+
+
+
+```{r Simultaneous sessions}
+SessionStartEnd4 <- SessionStartEnd3[order(SessionStartEnd3$userid.x,SessionStartEnd$attemptdate.x),]
+#Sometimes the sessionids are out of order with the recorded start time.  For the code below, we need to make sure the login times are all in order.
+SessionStartEnd4$Simultaneous <- 0
+
+cat("Total sessions:\n")
+(length(SessionStartEnd4$attemptdate.x))
+
+for(val in 2:(length(SessionStartEnd4$attemptdate.x))){
+  if(difftime(SessionStartEnd4$attemptdate.y[val-1],SessionStartEnd4$attemptdate.x[val])>0){
+    SessionStartEnd4$Simultaneous[val] <- 1
+  }
+}
+cat("\nDuplicated sessionids:")
+table(SessionStartEnd4$DupSessionid)
+cat("\nSimultaneous sessions by same user:")
+table(SessionStartEnd4$Simultaneous)
+```
+
+
+The days of the week are converted to an ordered factor of character strings.
+
+I introduced yet another variable for off hours, 0 or 1, representing whether a login is before 8AM or after 6PM.  This information is used in Section 2 Question 2.
+
+```{r}
+Wdayconverter <- c("Sun","Mon","Tue","Wed","Thu","Fri","Sat")
+
+for(val in 1:(length(SessionStartEnd4$WeekDay))){
+  SessionStartEnd4$WeekDay[val] <- Wdayconverter[as.numeric(SessionStartEnd4$WeekDay[val])]
+}
+
+SessionStartEnd4$WeekDay <- factor(SessionStartEnd4$WeekDay, levels=Wdayconverter, ordered=TRUE)
+
+cat("\nOff hours sessions, 6PM to 8AM:")
+
+SessionStartEnd4$SixPMto8AM <- as.numeric(SessionStartEnd4$LoginHour < 8 | SessionStartEnd4$LoginHour > 18)
+table(SessionStartEnd4$SixPMto8AM)
+
+```
+This is enough for basic data exploration.  Now the questions can be answered
+
+3. Come up with your own question that involves principles of machine learning and is relevant to the business. Write it out, explain your rationale, and solve.
+
+Is it possible to predict when a user will log in again if we know their history?  Answer:  
+Is there a way to predict how long a user's session will last?  Answer: you can ballpark it about 40% of the time
+Can we make a model for users in the first week of April given data from March?
+  
+```{r}
+
+
+library(caret)
+library(nnet)
+library(MLmetrics)
+
+
+```
+```{r}
+SessionStartEnd7 <- SessionStartEnd4
+SessionStartEnd7$CRTime <- as.factor(ceiling(SessionStartEnd7$duration**(1/4))) #uses cube root to reduce durations to reasonable bins.
+```
+
+
+
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(SessionStartEnd4[,'defsite.x'], times = 1, p = 0.5, list = FALSE)
+training = SessionStartEnd7[partition,] # Create the training sample
+dim(training)
+test = SessionStartEnd7[-partition,] # Create the test sample
+dim(test)
+head(test)
+
+```
+str(training)
+
+```{r}
+
+num_cols = c('CRTime','duration')
+preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+training[,num_cols] = predict(preProcValues, training[,num_cols])
+test[,num_cols] = predict(preProcValues, test[,num_cols])
+head(training[,num_cols])
+
+```
+
+
+```{r}
+set.seed(6677)
+#nn_mod = nnet(CRTime ~ type.x + defsite.x + groupname.x + LoginHour + WeekDay, data = training, size = c(20))
+
+
+```
+
+
+
+  ```{r}
+probs = predict(nn_mod, newdata = test)
+head(probs)
+test$scores = apply(probs, 1, which.max)
+#test$scores = ifelse(test$scores == 1, 'setosa', ifelse(test$scores == 2, 'versicolor', 'virginica'))
+head(test)
+
+```
+plot(nn_mod)
+
+  ```{r}
+print_metrics = function(df, label){
+  ## Compute and print the confusion matrix
+  cm = as.matrix(table(Actual = df$CRTime, Predicted = df$scores))
+  print(cm)
+  
+  ## Compute and print accuracy 
+  accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+  cat('\n')
+  cat(paste('Accuracy = ', as.character(accuracy)), '\n\n')                           
+  
+  ## Compute and print precision, recall and F1
+  precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+  recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+  F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+  metrics = sapply(c(precision, recall, F1), round, 3)        
+  metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))       
+  dimnames(metrics) = list(c('Precision', 'Recall', 'F1'), unique(test$CRTime))      
+  print(metrics)
+  #print(precision)
+  #print(recall)
+  #print(F1)
+}  
+#print_metrics(test, 'CRTime')  
+
+print("accuracy of about 18%")
+
+```
+
+This neural network did not do a great job predicting output.  The accuracy is about (3+951+1536+5+0)/13835 or 18%.   I learned that nnet only has 1 hidden layer, so I'm going to use the neuralnet library to see if it does a better job with multiple hidden layers.
+
+```{r}
+library(neuralnet)
+```
+
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(SessionStartEnd4[,'defsite.x'], times = 1, p = 0.5, list = FALSE)
+training = SessionStartEnd7[partition,] # Create the training sample
+dim(training)
+test = SessionStartEnd7[-partition,] # Create the test sample
+dim(test)
+head(test)
+
+```
+
+
+m <- cbind(m,training$CRTime)
+colnames(m)
+colnames(m)[59] <- "CRTime"
+
+m <- model.matrix( CRTime ~ type.x + defsite.x + groupname.x + as.factor(LoginHour) + as.factor(WeekDay), 
+  data = training
+)
+
+
+head(m)
+library(neuralnet)
+r <- neuralnet( 
+  Survived ~ Pclass + Sexmale + Age + SibSp + Parch + Fare + EmbarkedC + EmbarkedQ + EmbarkedS, 
+  data=m, hidden=10, threshold=0.01
+)
+WeekDay.L + WeekDay.Q + WeekDay.C + WeekDay^4 + WeekDay^5
+
+str(SessionStartEnd7)
+
+```{r}
+SessionStartEnd7 <- SessionStartEnd4
+SessionStartEnd7$CRTime <- as.numeric(ceiling(SessionStartEnd7$duration**(1/4))) #uses cube root to reduce durations to reasonable bins.
+SessionStartEnd7$WeekDay <- as.character(SessionStartEnd7$WeekDay)
+```
+
+names(SessionDummies)
+```{r}
+dummies = dummyVars(duration ~ CRTime + defsite.x + groupname.x + type.x + WeekDay + as.character(LoginHour) + as.character(MonthWeek), data = SessionStartEnd7)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd7))
+names(Session_dummies)
+```
+```{r}
+set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(Session_dummies[,'defsite.xTX'], times = 1, p = 0.5, list = FALSE)
+training = Session_dummies[partition,] # Create the training sample
+dim(training)
+test = Session_dummies[-partition,] # Create the test sample
+dim(test)
+head(test)
+
+```
+
+```{r}
+
+#num_cols = c('CRTime','duration')
+#preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+
+head(training[,"CRTime"])
+ratio <- max(training[,"CRTime"])
+ratio
+training[,"CRTime"] <- training[,"CRTime"]/ratio
+test[,"CRTime"] = test[,"CRTime"]/ratio
+head(training[,"CRTime"])
+range(training$CRTime)
+
+```
+
+
+nn <- neuralnet(m$as.factor(WeekDay.C) ~ m$as.factor(LoginHour)14 + m.as.factor(LoginHour)15 + m.as.factor(LoginHour)16 + m.as.factor(LoginHour)17, data=m, hidden=1, linear.output = FALSE)
+
+
+
+
+
+```{r}
+#nn <- neuralnet(CRTime ~ ., data=training, hidden=c(2,2), linear.output = FALSE)
+```
+```{r}
+#plot(nn)
+```
+```{r}
+if(max(test$CRTime)<2){
+  test$CRTime <- round(test$CRTime*ratio,1)
+}
+unique(test$CRTime)
+```
+
+
+  ```{r}
+probs = predict(nn, newdata = test)
+head(probs)
+max(probs)
+min(probs)
+max(probs)-min(probs)
+if(max(probs)<2){
+test$scores <- round(ratio*(probs - min(probs))/(max(probs)-min(probs)),0)
+}
+
+#test$scores = apply(probs, 1, which.max)
+#test$scores = ifelse(test$scores == 1, 'setosa', ifelse(test$scores == 2, 'versicolor', 'virginica'))
+head(test)
+unique(test$scores)
+```
+```{r}
+print_metrics = function(df, label){
+    ## Compute and print the confusion matrix
+    cm = as.matrix(table(Actual = df$CRTime, Predicted = df$scores))
+    print(cm)
+
+    ## Compute and print accuracy 
+    accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+    cat('\n')
+    cat(paste('Accuracy = ', as.character(accuracy)), '\n\n')                           
+
+    ## Compute and print precision, recall and F1
+    precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+    recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+    F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+    metrics = sapply(c(precision, recall, F1), round, 3)        
+    metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))       
+    dimnames(metrics) = list(c('Precision', 'Recall', 'F1'), unique(test$CRTime)[order(unique(test$CRTime))])      
+    print(metrics)
+    #print(precision)
+    #print(recall)
+    #print(F1)
+}
+```
+  ```{r}
+print_metrics(test, 'CRTime')   
+```
+1 layer, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0  109  431  203  201   39   14    1
+     1   49  106   66   52   16    4    1
+     2 1721 1272  688  405  102   34    7
+     3  550 1900 1521 1421  497  183   51
+     4  131  425  440  545  202   79   31
+     5   15   53   62  122   42   23    9
+     6    0    3    4    5    2    0    0
+
+Accuracy =  0.184 
+
+              0     1     2     3     4     5   6
+Precision 0.109 0.361 0.163 0.232 0.109 0.071   0
+Recall    0.042 0.025 0.231 0.517 0.224 0.068   0
+F1        0.061 0.047 0.191 0.320 0.147 0.069 NaN
+
+
+1 layer, width 5
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0    8  164  438  295   78   15    0
+     1    4   41  139   88   19    3    0
+     2   25 1336 1878  808  160   22    0
+     3   29  602 2420 2231  696  143    2
+     4    8  154  568  736  323   62    2
+     5    1   21   61  150   72   21    0
+     6    0    2    2    5    4    1    0
+
+Accuracy =  0.325 
+
+              0     1     2     3     4     5   6
+Precision 0.008 0.139 0.444 0.364 0.174 0.064   0
+Recall    0.107 0.018 0.341 0.517 0.239 0.079   0
+F1        0.015 0.031 0.386 0.428 0.202 0.071 NaN
+
+2 layers, width 2
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0  308   15   21  501    5    5  143
+     1  102    4    9  134    0    3   42
+     2 2328   51   68 1454   19   19  290
+     3 1239   68  135 3099   44   68 1470
+     4  268   15   31  879   14   20  626
+     5   30    8    4  124    4    2  154
+     6    2    0    1    9    0    0    2
+
+Accuracy =  0.253 
+
+              0     1     2     3     4     5     6
+Precision 0.309 0.014 0.016 0.506 0.008 0.006 0.143
+Recall    0.072 0.025 0.253 0.500 0.163 0.017 0.001
+F1        0.117 0.018 0.030 0.503 0.014 0.009 0.001
+
+2 layers, width 2, rerun
+
+      Predicted
+Actual    0    1    2    3    4    5    6
+     0   14    9  203  590   12  165    5
+     1    4    1   66  161    4   52    6
+     2   38   24 1918 1881   30  309   29
+     3   26   21  824 3527   76 1548  101
+     4    4    4  197  940   35  645   28
+     5    1    0   24  132    3  153   13
+     6    0    0    0    8    0    6    0
+
+Accuracy =  0.408 
+
+              0     1     2     3     4     5   6
+Precision 0.014 0.003 0.454 0.576 0.019 0.469   0
+Recall    0.161 0.017 0.593 0.487 0.219 0.053   0
+F1        0.026 0.006 0.514 0.528 0.035 0.096 NaN
+
+
+This still isn't working as well as I had expected, and the models take a long time to build.  They often get stuck and have to be restarted.  I want to use TensorFlow because I've seen it in use before, and it allows far more hidden layers and greater layer width.  It is also possible to fine-tune the width of each hidden layer and of the output layer which might be very useful.  I want to try setting the first 3 weeks of the month as training data and use the 4th week as test data.
+
+Session_dummies.csv <- write.csv(Session_dummies, file = 'Session_dummies.csv')
+getwd()
+
+I'm trying many different ways to use tensorflow and it is not working in RStudio.  I can't seem to make it work in jupyter in python either, and it has been so many hours of frustration that I want to move on.  Even if I could get it working on my computer, there's a very low probability that the same installation and setup code would work on yours.  
+
+The data are so scrambled and overlapping that it seems impossible to predict anything with random forest, cluster analysis, svms, regression analysis, or neural networks.
+
+
+
+
+if("tfestimators" %in% rownames(installed.packages()) == FALSE) {install.packages("tfestimators")}
+library(tfestimators)
+
+library(tensorflow)
+
+devtools::install_github("rstudio/tensorflow")
+
+#```{r}
+library(keras)
+
+py_install("pandas")
+
+conda_create("r-reticulate")
+conda_install("r-reticulate", "scipy")
+scipy <- import("scipy")
+
+virtualenv_list()
+
+library(reticulate)
+library(tensorflow)
+install_tensorflow()
+setwd('C:/Users/spdr/AppData/Local/R-MINI~1/envs/R-RETI~1/Scripts')
+getwd()
+tf$constant("Hello World")
+#```
+
+
+
+
+
+
+  ```{r}
+model <- keras_model_sequential()
+```
+getwd()
+
+  ```{r}
+summary(model)
+```
+
+
+
+
+This plot examines the relationship between login hour, duration, job site, and job type.  At first glance, it appears that all job sites and job types have a lot of overlap.  Further work will probably confirm this.  Given a session with a given time of day or duration, We can know just from these visualizations that it will be very difficult to predict the user's job or site.
+
+
+
+
+
+```{r}
+ggplot(SessionStartEnd4, aes_string('LoginHour','duration')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE)
+
+ggplot(SessionStartEnd4, aes_string('LoginHour','duration')) +
+  geom_point(aes(color = factor(groupname.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE)
+
+
+```
+
+End of data exploration.  Now the questions can be answered.
+
+### Part 1 (Machine Learning Concepts)
+
+
+1. Given this data, is it possible to predict what user group and/or location a user is tied to based on login time and session duration? 
+
+First, let's look at job types by login hour and duration in boxplots:
+  
+  ```{r}
+ggplot(SessionStartEnd4, aes(x=groupname.x, y=duration)) + 
+  geom_boxplot() +
+  scale_y_continuous(limits = c(0,200)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r}
+ggplot(SessionStartEnd4, aes(x=groupname.x, y=LoginHour)) + 
+  geom_boxplot() +
+  #scale_y_continuous(limits = c(0,300)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+Looking at these boxplots, it is clearly going to be very difficult to predict a single user's job based solely on their login time and duration.  Any predictive model will have extremely low accuracy due to the large number of jobs and also their high degree of overlap with one another.
+
+```{r}
+Groupnamedf <- data.frame(groupname.x <- unique(SessionStartEnd4$groupname.x))
+
+for(val in 1:length(Groupnamedf$groupname.x)){
+  Groupnamedf$number[val] <- length(UniqueUser2$groupname[UniqueUser2$groupname == Groupnamedf$groupname.x[val]])
+}
+
+for(val in 1:length(Groupnamedf$groupname.x)){
+  Groupnamedf$SessNumber[val] <- length(SessionStartEnd4$groupname.x[SessionStartEnd4$groupname.x == Groupnamedf$groupname.x[val]])
+}
+
+for(val in 1:length(Groupnamedf$groupname.x)){
+  Groupnamedf$duration[val] <- round(median(SessionStartEnd4$duration[SessionStartEnd4$groupname.x == Groupnamedf$groupname.x[val]]),3)
+}
+
+for(val in 1:length(Groupnamedf$groupname.x)){
+  Groupnamedf$LoginHour[val] <- round(mean(SessionStartEnd4$LoginHour[SessionStartEnd4$groupname.x == Groupnamedf$groupname.x[val]]),3)
+}
+# shift variable - 0 indicates earlier average login, 1 indicates later mean login.
+median(Groupnamedf$LoginHour) # 11.007
+Groupnamedf$shift <- ifelse(Groupnamedf$LoginHour < median(Groupnamedf$LoginHour),0,1)
+
+median(Groupnamedf$duration) # 30
+Groupnamedf$HighDurUser <- ifelse(Groupnamedf$duration < median(Groupnamedf$duration),0,1)
+
+```
+
+
+
+I am dividing the job types into 2x2 equal clusters without using a clustering algorithm: early (E) vs. late (L) login, and low (L) vs. high (H) duration.  They will be abbreviated EL, EH, LL, and LH.
+
+```{r}
+Groupnamedf$Clust <- (2*Groupnamedf$shift+1+Groupnamedf$HighDurUser)
+ClustConv <- c("EL","EH","LL","LH")
+Groupnamedf$Clust <- ClustConv[Groupnamedf$Clust]
+table(Groupnamedf$Clust)
+
+```
+Now I will present the same boxplots colored according to their manually assigned cluster.
+
+```{r}
+SessionStartEnd6 <- SessionStartEnd4
+
+for(val in 1:length(SessionStartEnd6$groupname.x)){
+  SessionStartEnd6$JobClust[val] <- Groupnamedf$Clust[match(SessionStartEnd6$groupname.x[val],Groupnamedf$groupname.x)]
+}
+```
+
+```{r}
+ggplot(SessionStartEnd6, aes(x=groupname.x, y=duration, fill = SessionStartEnd6$JobClust)) + 
+  geom_boxplot() +
+  scale_y_continuous(limits = c(0,200)) +
+  scale_fill_manual(values=c("#a95b8d", "#168716", "#930054", "#468713")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r}
+ggplot(SessionStartEnd6, aes(x=groupname.x, y=LoginHour, fill = SessionStartEnd6$JobClust)) + 
+  geom_boxplot() +
+  #scale_y_continuous(limits = c(0,300)) +
+  scale_fill_manual(values=c("#168713", "#468713", "#a94b8d", "#a94b84")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r}
+#import the package
+library(randomForest)
+#set login hour to factor
+SessionStartEnd6$LoginHour <- factor(SessionStartEnd6$LoginHour)
+
+# Set random seed to make results reproducible:
+set.seed(17)
+# Calculate the size of each of the data sets:
+data_set_size <- floor(nrow(SessionStartEnd6)/2)
+# Generate a random sample of "data_set_size" indexes
+indexes <- sample(1:nrow(SessionStartEnd6), size = data_set_size)
+# Assign the data to the correct sets
+training <- SessionStartEnd6[indexes,]
+validation1 <- SessionStartEnd6[-indexes,]
+```
+
+
+```{r}
+# Perform training:
+
+for(val in c(2,5,10,30,100,300)){
+  print(val)
+  rf_classifier = randomForest(factor(JobClust) ~ training$duration + training$LoginHour, data=training, ntree=30, mtry=2, importance=TRUE)
+  print(rf_classifier)
+}
+
+str(SessionStartEnd6)
+
+```
+The error is minimized at 59.46% with 30 trees (your results may be different).  It's better than the roughly 75% error that would be expected by random assignment.  Even with a great deal of manual guidance and cluster assignment, it is extremely difficult for the computer to predict one of 4 job clusters merely with duration and login time.  If you asked me "this user logged in at 11:15AM for 14 minutes, which of these 4 job clusters did he belong to," I'd be pretty hard pressed to guess the right answer more than 25% of the time too.  Let's give it more variables to work with, aside from groupname of course because that would be giving it the answer.  I won't give it location since that's another variable we might want to predict with similar code, but I will give it the logout type because the computer can easily collect that as a given at the same time it obtains duration.
+
+
+```{r}
+for(val in c(2,5,10,30,100,300)){
+  print(val)
+  rf_classifier = randomForest(factor(JobClust) ~ training$duration + factor(training$LoginHour) + factor(training$WeekDay) + factor(training$MonthWeek) + attemptresult.y, data=training, ntree=val, mtry=2, importance=TRUE)
+  print(rf_classifier)
+}
+```
+
+Now 300 trees is the best of the number of trees tested.  It took a little while to run, but the error was only 54.62%.  This error is still probably too high to be useful.  But let's move on to validation to see what happens.
+
+  ```{r}
+#rf_classifier = randomForest(factor(JobClust) ~ training$duration + factor(training$LoginHour) + WeekDay + MonthWeek + attemptresult.y, data=training, ntree=val, mtry=2, importance=TRUE)
+
+prediction_for_table <- predict(rf_classifier,validation1[,"JobClust"])
+TAB <- table(observed=validation1[,"JobClust"],predicted=prediction_for_table)
+TAB
+
+
+```
+
+
+
+
+Let's see if any patterns stick out by plotting login time and session duration with respect to each other, coloring by jobsite.  There is no obvious pattern or cluster in this brief look.  Both major sites have a lot of points scattered everywhere, mainly during daylight hours.
+
+
+```{r}
+ggplot(SessionStartEnd4, aes_string('LoginHour','duration')) +
+                 geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+                 scale_shape(guide = FALSE) + scale_alpha(guide = FALSE)
+
+
+```
+No obvious patterns stick out.  Sessions are more concentrated in daylight hours as one would expect, but the lack of clear clustering by color lets us know that the different job sites use the system at similar hours and durations.  Next let's check login times by day of the week.  Again, there is not much distinction between the 2 major sites.  
+
+
+
+```{r}
+ggplot(SessionStartEnd4, aes_string('WeekDay','LoginHour')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE) + 
+  ggtitle(paste('ALL MARCH'))
+
+```
+We can break it down by week of the month as well, further below.  Will a pattern emerge, or will the green and orange dots be scattered and intermingled with each other everywhere?
+  
+  ```{r}
+ggplot(SessionStartEnd4[SessionStartEnd4$MonthWeek == 1,], aes_string('WeekDay','LoginHour')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE) +
+  ggtitle(paste('WEEK 1'))
+
+```
+```{r}
+ggplot(SessionStartEnd4[SessionStartEnd4$MonthWeek == 2,], aes_string('WeekDay','LoginHour')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE) +
+  ggtitle(paste('WEEK 2'))
+
+```
+```{r}
+ggplot(SessionStartEnd4[SessionStartEnd4$MonthWeek == 3,], aes_string('WeekDay','LoginHour')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE)
+ggtitle(paste('WEEK 3'))
+
+```
+```{r}
+ggplot(SessionStartEnd4[SessionStartEnd4$MonthWeek == 4,], aes_string('WeekDay','LoginHour')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE)
+ggtitle(paste('WEEK 4'))
+
+```
+```{r}
+ggplot(SessionStartEnd4[SessionStartEnd4$MonthWeek == 5,], aes_string('WeekDay','LoginHour')) +
+  geom_jitter(aes(color = factor(defsite.x), alpha = 0.2)) +
+  scale_shape(guide = FALSE) + scale_alpha(guide = FALSE)
+ggtitle(paste('WEEK 5'))
+
+```
+table(date(SessionStartEnd4[SessionStartEnd4$MonthWeek == 5,"attemptdate.x"]))
+
+There are no obvious patterns by site.  Both sites have most logins on weekdays during normal business hours, with fewer logins on weekends or off hours.  There are some weekly variations, for example, weekend logins were low at the beginning of the month and higher in the middle and end (we will see the same thing more concisely in a barplot further below).  Saturday March 14th and Sunday March 15th appear to have slightly more than their fair share of Texas logins, but there are no patterns that last through a week or a month that we can detect simply by eye.
+
+But let's see a cluster analysis to see if that will help. This did not turn out to be the best analysis because it only tends to work well with data that is already well-differentiated, such as the virginica/setosa separation in the labs.  Cluster analysis presented problems in this analysis because if you tell the model what site or user type is associated with a datapoint, the program uses that information to yield a differentiation that it would not have known if you had not given the model that information. In other words, it will tell you "this user type is all in one cluster and this other type is in another," but it would not have known to give you such a separation if you had not given the model that information, and the truth is that all the overlap should produce a blurry result.
+
+First, I turn everything important into a factor.  We should not expect a linear relationship between login hour and anything else (say, 23 times as many logins at 23:00 hours as at 01:00 hours), and should treat every hour as a separate entity instead of a part of a continuum.
+
+
+
+```{r}
+SessionStartEnd5 <- SessionStartEnd4
+#SessionStartEnd5$WeekDay <- as.factor(SessionStartEnd5$WeekDay)
+SessionStartEnd5$LoginHour <- as.factor(SessionStartEnd5$LoginHour)
+SessionStartEnd5$defsite.x <- as.factor(SessionStartEnd5$defsite.x)
+SessionStartEnd5$groupname.x <- as.factor(SessionStartEnd5$groupname.x)
+SessionStartEnd5$type.x <- as.factor(SessionStartEnd5$type.x)
+SessionStartEnd5$MonthWeek <- as.factor(SessionStartEnd5$MonthWeek)
+
+
+```
+
+
+This  analysis uses login duration, site, job type, user type, day of the week, login hour, and week of the month to make clusters.
+
+```{r}
+library(caret)
+library(repr)
+library(e1071)
+library(MLmetrics)
+library(cluster)
+library(MASS)
+```
+
+
+```{r}
+dummies = dummyVars(duration ~ defsite.x + groupname.x + type.x + duration + WeekDay + LoginHour + MonthWeek, data = SessionStartEnd5)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd5))
+names(Session_dummies)
+```
+
+
+```{r}
+near_zero = nearZeroVar(Session_dummies, freqCut = 95/5, uniqueCut = 10, saveMetrics = TRUE)
+#near_zero[(near_zero$zeroVar == TRUE) | (near_zero$nzv == TRUE), ]
+#near_zero
+```
+
+
+
+```{r}
+set.seed(4455)
+kmeans_2 = kmeans(Session_dummies, centers = 2)
+SessionStartEnd5[,'assignment'] = kmeans_2$cluster
+
+```
+
+```{r Cluster analysis}
+
+plot_cluster = function(Session_dummies){
+  options(repr.plot.width=8, repr.plot.height=4.5)
+  grid.arrange(ggplot(Session_dummies, aes_string('WeekDay','defsite.x')) +
+                 geom_jitter(aes(color = factor(assignment), alpha = 0.2)) +
+                 scale_shape(guide = FALSE) + scale_alpha(guide = FALSE),
+               ggplot(Session_dummies, aes_string('groupname.x','defsite.x')) +
+                 geom_jitter(aes(color = factor(assignment), alpha = 0.2)) +
+                 scale_shape(guide = FALSE) + scale_alpha(guide = FALSE),
+               ggplot(Session_dummies, aes_string('duration','type.x')) +
+                 geom_jitter(aes(color = factor(assignment), alpha = 0.2)) +
+                 scale_shape(guide = FALSE) + scale_alpha(guide = FALSE),
+               ggplot(Session_dummies, aes_string('LoginHour','duration')) +
+                 geom_point(aes(color = factor(assignment), alpha = 0.2)) +
+                 scale_shape(guide = FALSE) + scale_alpha(guide = FALSE),
+               ncol = 2)
+}
+
+plot_cluster(SessionStartEnd5)
+
+table(SessionStartEnd5$assignment)
+
+```
+table(SessionStartEnd5[SessionStartEnd5$type.x == "AUTHORIZED",'assignment'])
+
+Authorized users were about half of all users.  It appears that the program clustered all authorized users into one cluster, simply because we gave the model that information, not because authorized users act in a special way.  We can delete the type.x variable from the model, but we risk falling into the same trap by giving the model location information.  The model will tend to group by location because it cannot make clean groups by duration or LoginHour.  This is consistent with my earlier speculation that it will be very difficult or impossible to predict user location or job type based only on duration and LoginHour.  There is simply so much overlap that the model will have to guess and be wrong almost half of the time.
+
+Here I deleted the type.x variable
+
+```{r}
+dummies = dummyVars(duration ~ defsite.x + groupname.x + duration + WeekDay + LoginHour + MonthWeek, data = SessionStartEnd5)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd5))
+#names(Session_dummies)
+```
+
+```{r}
+set.seed(4455)
+kmeans_2 = kmeans(Session_dummies, centers = 2)
+SessionStartEnd5[,'assignment'] = kmeans_2$cluster
+
+```
+
+```{r}
+plot_cluster(SessionStartEnd5)
+
+table(SessionStartEnd5$assignment)
+
+```
+
+Now the data is more evenly split by user type, but one of the clusters is much larger than the other, with about 21,000 as compared to 6,400 (either 1 or 2 is much bigger, but it can't be predicted which one will be bigger in advance due to random initial placement).  Worse still, the assignment of clusters based on LoginHour and duration seems to be random and unpredictable, which is unfortunate if these are the 2 variables we want to use to predict anything else.
+
+table(SessionStartEnd5[SessionStartEnd$type.x == "EXPRESS",'assignment'])
+
+Let's try it with 3 clusters.
+
+```{r}
+set.seed(4455)
+kmeans_3 = kmeans(Session_dummies, centers = 3)
+SessionStartEnd5[,"assignment"] = kmeans_3$cluster
+
+```
+
+
+```{r}
+plot_cluster(SessionStartEnd5)
+
+table(SessionStartEnd5$assignment)
+
+```
+Here it appears we got some differentiation of the express users without giving their information to the model.  536 to 676 our of 686 express users apparently tend to fall into cluster 3.  This has the problem of assigning all of one cluster to Texas, 10595 of them.  Let's delete location and job type from the model and see if it can still tell us anything about type.x, or location, or job type.  
+
+table(SessionStartEnd5[SessionStartEnd5$type.x == "EXPRESS",'assignment'])
+table(SessionStartEnd5[SessionStartEnd5$defsite.x == "TX",'assignment'])
+
+
+```{r}
+dummies = dummyVars(duration ~ duration + WeekDay + LoginHour + MonthWeek, data = SessionStartEnd5)
+Session_dummies = data.frame(predict(dummies, newdata = SessionStartEnd5))
+#names(Session_dummies)
+```
+
+```{r}
+set.seed(4455)
+kmeans_2 = kmeans(Session_dummies, centers = 2)
+SessionStartEnd5[,'assignment'] = kmeans_2$cluster
+
+```
+
+```{r}
+plot_cluster(SessionStartEnd5)
+
+table(SessionStartEnd5$assignment)
+
+```
+
+There does not appear to be useful information here.  It is extremely scattered, just like before.
+
+
+```{r}
+set.seed(4455)
+kmeans_3 = kmeans(Session_dummies, centers = 3)
+SessionStartEnd5[,'assignment'] = kmeans_3$cluster
+
+```
+
+```{r}
+plot_cluster(SessionStartEnd5)
+
+table(SessionStartEnd5$assignment)
+
+```
+
+There is still a lot of scatter.  Cluster 1 ended up with slightly over half of the data when I ran it (the "big" cluster may end up being #2 or #3 if run again due to random initial placement, so I will just call it the "big" cluster going forward).  The big cluster contains more than its fair share of weekend logins.  I would have hypothesized that the weekend logins would be a minority cluster, but this is not how it turned out.
+                                                                                                        
+                                                                                                        
+                                                                                                        table(SessionStartEnd5[SessionStartEnd5$type.x == "EXPRESS",'assignment'])
+                                                                                                        table(SessionStartEnd5[SessionStartEnd5$defsite.x == "TX",'assignment'])
+                                                                                                        table(SessionStartEnd5[SessionStartEnd5$defsite.x == "LA",'assignment'])
+                                                                                                        
+                                                                                                        Locations TX and LA seem equally split between the clusters.  There is probably little left to gain from cluster analysis.
+                                                                                                        
+                                                                                                        Moving on, I used a regression analysis to see if duration could be predicted by other variables.  It could not.
+                                                                                                        
+                                                                                                        
+```{r Partition}
+                                                                                                        
+                                                                                                        set.seed(1955)
+## Randomly sample cases to create independent training and test data
+partition = createDataPartition(SessionStartEnd4[,'LoginHour'], times = 1, p = 0.75, list = FALSE)
+training = SessionStartEnd4[partition,] # Create the training sampl
+dim(training)
+test = SessionStartEnd4[-partition,] # Create the test sample
+dim(test)
+```
+                                                                                                        
+                                                                                                        
+                                                                                                        
+```{r}
+#num_cols = c('duration', 'LoginHour', 'WeekDay')
+                                                                                                        #preProcValues <- preProcess(training[,num_cols], method = c("center", "scale"))
+                                                                                                        
+                                                                                                        #training[,num_cols] = predict(preProcValues, training[,num_cols])
+                                                                                                        #test[,num_cols] = predict(preProcValues, test[,num_cols])
+                                                                                                        #head(training[,num_cols])
+                                                                                                        
+                                                                                                        
+## define and fit the linear regression model
+lin_mod = lm(duration ~ defsite.x + as.character(LoginHour), data = training)
+                                                                        
+ #groupname.x
+```
+                                                                                                        
+lin_mod = lm(defsite.x ~ duration + as.character(LoginHour), data = training)
+                                                                                                        
+                                                    
+```{r}
+summary(lin_mod)$coefficients
+                                          
+print_metrics = function(lin_mod, df, score, label){
+resids = df[,label] - score
+resids2 = resids**2
+N = length(score)
+r2 = as.character(round(summary(lin_mod)$r.squared, 4))
+adj_r2 = as.character(round(summary(lin_mod)$adj.r.squared, 4))
+cat(paste('\nMean Square Error      = ', as.character(round(sum(resids2)/N, 4)), '\n'))
+cat(paste('Root Mean Square Error = ', as.character(round(sqrt(sum(resids2)/N), 4)), '\n'))
+cat(paste('Mean Absolute Error    = ', as.character(round(sum(abs(resids))/N, 4)), '\n'))
+cat(paste('Median Absolute Error  = ', as.character(round(median(abs(resids)), 4)), '\n'))
+cat(paste('R^2                    = ', r2, '\n'))
+cat(paste('Adjusted R^2           = ', adj_r2, '\n'))
+                                                  }
+```
+                                                                                                        
+                                          
+```{r}
+                                            
+                                        
+score = predict(lin_mod, newdata = test)
+                                                                                                        print_metrics(lin_mod, test, score, label = 'duration')     
+                                
+hist_resids = function(df, score, label, bins = 10){
+                                                                                                        options(repr.plot.width=4, repr.plot.height=3) # Set the initial plot area dimensions
+df$resids = df[,label] - score
+bw = (max(df$resids) - min(df$resids))/(bins + 1)
+ggplot(df, aes(resids)) + 
+                                                                                                            geom_histogram(binwidth = bw, aes(y=..density..), alpha = 0.5) +
+                                                                                                            geom_density(aes(y=..density..), color = 'blue') +
+                                                                                                            xlab('Residual value') + ggtitle('Histogram of residuals')
+                                                                                                        }
+                                                                                                        
+                                                                                                        hist_resids(test, score, label = 'duration') 
+                                                                                                      
+```
+                                                                                                        
+This shows a very high RMSE and very low R^2, telling us session duration is not very well correlated with location or job type.
+                
+Metrics using groupname.x, defsite.x, and duration to predict time
+                                                                                                        
+                                                                                                        Estimate  Std. Error    t value     Pr(>|t|)
+                                                                                                        (Intercept)                           -0.20286117 0.083994540 -2.4151709 1.573642e-02
+                                                                                                        defsite.xLA_PIPE                      -0.24886683 0.239189249 -1.0404599 2.981384e-01
+                                                                                                        defsite.xOK_PIPE                      -0.27783763 0.244937660 -1.1343198 2.566736e-01
+                                                                                                        defsite.xTX                            0.08727721 0.015210127  5.7380983 9.708028e-09
+                                                                                                        defsite.xTX_PIPE                       0.18139875 0.423235376  0.4286002 6.682187e-01
+                                                                                                        groupname.xCONTRACTOR                  0.23366808 0.101670672  2.2982840 2.155554e-02
+                                                                                                        groupname.xCONTRACTOR PLANNER          0.57527076 0.106346438  5.4094032 6.393534e-08
+                                                                                                        groupname.xCONTRACTOR SUPERVISOR       0.23913014 0.087108900  2.7451862 6.052867e-03
+                                                                                                        groupname.xCONTRACTOR TECHNICIAN       0.11000719 0.089869779  1.2240732 2.209385e-01
+                                                                                                        groupname.xCORP PIPELINE TECH SUPPORT -0.38372429 0.699792690 -0.5483399 5.834644e-01
+                                                                                                        groupname.xENGINEER                    0.08942642 0.090760361  0.9853026 3.244869e-01
+                                                                                                        groupname.xIT ADMINISTRATOR            0.25824419 0.407281700  0.6340677 5.260436e-01
+                                                                                                        groupname.xIT ANALYST                  0.13429097 0.094081951  1.4273830 1.534846e-01
+                                                                                                        groupname.xIT SECURITY                 0.15305065 0.131134701  1.1671254 2.431731e-01
+                                                                                                        groupname.xMAINTENANCE SUPERVISOR      0.09720206 0.086716293  1.1209203 2.623348e-01
+                                                                                                        groupname.xMAINTENANCE TECHNICIAN      0.10147699 0.084361259  1.2028862 2.290341e-01
+                                                                                                        groupname.xMASTER DATA                 0.38157149 0.090519850  4.2153350 2.504638e-05
+                                                                                                        groupname.xPIPELINE FIELD MGMT         0.17400387 0.292318859  0.5952536 5.516804e-01
+                                                                                                        groupname.xPLANNER                     0.46222771 0.085404200  5.4122363 6.293310e-08
+                                                                                                        groupname.xPURCHASING MANAGER          0.11459384 0.169232917  0.6771368 4.983267e-01
+                                                                                                        groupname.xQUICK REPORTING USER        0.14886271 0.088297588  1.6859204 9.182617e-02
+                                                                                                        groupname.xSCHEDULER                  -0.23931910 0.085787944 -2.7896589 5.281175e-03
+                                                                                                        groupname.xSENIOR STOREROOM CLERK      0.45850058 0.097382071  4.7082648 2.514505e-06
+                                                                                                        groupname.xSTOREROOM CLERK             0.39970906 0.086214609  4.6362103 3.570180e-06
+                                                                                                        groupname.xSTOREROOM MANAGER          -0.13003316 0.182711689 -0.7116849 4.766679e-01
+                                                                                                        groupname.xSUPPLY CHAIN               -0.07632736 0.233580066 -0.3267717 7.438439e-01
+                                                                                                        LoginHour                              0.01602455 0.006799166  2.3568404 1.844041e-02
+                                                                                                        
+                                                                                                        prediction from a rank-deficient fit may be misleading
+                                                                                                        
+                                                                                                        Mean Square Error      =  0.8709 
+                                                                                                        Root Mean Square Error =  0.9332 
+                                                                                                        Mean Absolute Error    =  0.5684 
+                                                                                                        Median Absolute Error  =  0.432 
+                                                                                                        R^2                    =  0.0483 
+                                                                                                        Adjusted R^2           =  0.0471 
+                                                                                                        
+                                                                                                        
+                                                                                                        Metrics using defsite.x and duration to predict time
+                                                                                                        
+                                                                                                        Estimate  Std. Error    t value     Pr(>|t|)
+                                                                                                        (Intercept)      -0.04661209 0.008850736 -5.2664645 1.404623e-07
+                                                                                                        defsite.xLA_PIPE -0.30331231 0.147408357 -2.0576331 3.963783e-02
+                                                                                                        defsite.xOK_PIPE -0.43385020 0.235385515 -1.8431474 6.532174e-02
+                                                                                                        defsite.xTX       0.12411388 0.014267628  8.6989845 3.593741e-18
+                                                                                                        defsite.xTX_PIPE  0.07815227 0.266857660  0.2928613 7.696311e-01
+                                                                                                        LoginHour         0.01409947 0.006930199  2.0344971 4.191419e-02
+                                                                                                        
+                                                                                                        hour as integer
+                                                                                                        
+                                                                                                        Mean Square Error      =  0.8788 
+                                                                                                        Root Mean Square Error =  0.9374 
+                                                                                                        Mean Absolute Error    =  0.5894 
+                                                                                                        Median Absolute Error  =  0.509 
+                                                                                                        R^2                    =  0.0044 
+                                                                                                        Adjusted R^2           =  0.0041 
+                                                                                                        
+                                                                                                        as.character for hours
+                                                                                                        
+                                                                                                        Mean Square Error      =  0.8511 
+                                                                                                        Root Mean Square Error =  0.9226 
+                                                                                                        Mean Absolute Error    =  0.5812 
+                                                                                                        Median Absolute Error  =  0.4444 
+                                                                                                        R^2                    =  0.0426 
+                                                                                                        Adjusted R^2           =  0.0414 
+                                                                                                        
+                                                                                                        
+                                                                                                        
+                                                                                                        Here I used a Support Vector Machine (SVM) to attempt to predict location based on LoginHour, duration, WeekDay, and MonthWeek.  The SVM had extremely high error and was not much better at predicting location or job type than random chance would predict.
+                                                                                                        
+                                                                                                        
+```{r SVM predictor of site}
+                                                                                                      
+svm_mod = svm(factor(defsite.x) ~ as.character(LoginHour) + duration + as.character(WeekDay) + as.character(MonthWeek), data = training, scale = FALSE, type = 'C-classification')
+                                                                                                        
+                                                                                                        test[,'scores'] = predict(svm_mod, newdata = test)
+test[1:10,]
+                                                                                                    
+                                                                                                    
+```
+                                                                                                        
+```{r evaluation}
+print_metrics = function(df, label){
+# Compute and print the confusion matrix
+cm = as.matrix(table(Actual = df$defsite.x, Predicted = df$scores))
+print(cm)
+                                                                                            
+## Compute and print accuracy 
+accuracy = round(sum(sapply(1:nrow(cm), function(i) cm[i,i]))/sum(cm), 3)
+cat('\n')
+cat(paste('Accuracy = ', as.character(accuracy)), '\n \n')                           
+                                                                                                          
+## Compute and print precision, recall and F1
+precision = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[i,]))
+recall = sapply(1:nrow(cm), function(i) cm[i,i]/sum(cm[,i]))    
+F1 = sapply(1:nrow(cm), function(i) 2*(recall[i] * precision[i])/(recall[i] + precision[i]))    
+metrics = sapply(c(precision, recall, F1), round, 3) 
+metrics = t(matrix(metrics, nrow = nrow(cm), ncol = 3))       
+#metrics <- metrics[1:3,]
+                                                                                                        dimnames(metrics) <- list(c('Precision', 'Recall', 'F1'), unique(df$defsite.x))      
+                                                                                                          print(metrics)
+                                                                                                        
+#  paste(cat("Precision: ",precision,"\nrecall: ",recall,"\nF1: ",F1,"\n"))
+}  
+                                                                                                        print_metrics(test, 'defsite.x')   
+```
+                                                                                                        
+This model has terrible accuracy.  Because LA constituted over half of total entries, so the model guessed LA for almost everything.  The dataset was not balanced, but we will balance it next and try again.
+                                                                                                        
+                                                                                                        
+Now, redoing it with a rebalanced training dataset,
+                                                                                                        
+                                                                                                        
+                                                                                                        
+```{r }
+partition <- training[training$defsite.x == 'LA',] #12717
+                                                                                                      training[training$defsite.x == 'TX',]  # 7962
+                                                                                                      
+drops <- sample(which(training$defsite.x =='LA'), sum(as.numeric(training$defsite.x == 'LA')) - sum(as.numeric(training$defsite.x == 'TX')))
+TrainRebal <- training[-drops,]
+dim(train)
+                                                                                                        dim(TrainRebal)
+                                                                                                        table(TrainRebal$defsite.x)
+```
+                                                          
+Now the dataset has 7962 entries from LA and 7962 from TX.
+                                                                                                        
+                                                                                              
+```{r rebalanced SVM}
+                                                                                                        
+svm_mod = svm(factor(defsite.x) ~ as.character(LoginHour) + duration + as.character(WeekDay), data = TrainRebal, scale = FALSE, type = 'C-classification')
+                                                                                                        
+                                                                                                        test[,'scores'] = predict(svm_mod, newdata = test)
+test[1:10,]
+                                                                                                      
+```
+                                                                                                        
+```{r evaluation}
+print_metrics(test, 'defsite.x')
+                                                                                                        
+```
+                                                                                                        
+                                                                                                        
+                                                                                                        
+It appears to be impossible to predict user location or job based solely on login time and duration.  Adding the day of the week and week of the month did not help either.  The login patterns of all kinds of users vary so much that it is very difficult to predict a user's location or job and be correct due to anything other than chance.
+
+
+
+
+
+###
+
+2. Consider an anomaly detection package in R and apply it to this data. Can we establish a regular pattern and see what logins are outside the norm? Who are these users? What groups do they belong to?
+
+
+
+3. Come up with your own question that involves principles of machine learning and is relevant to the business. Write it out, explain your rationale, and solve.
+
+Which users tend to have simultaneous sessions, wasting licenses?
+
+Let's just see who are the users with the most simultaneous sessions and duplicate sessions.  Maybe we can find some commonalities or at least send them a notification individually.
+                                                                                                        
+                                                                                                        
+```{r}
+UniqueUser3 <- UniqueUser2
+                                                                            
+SumSessions <- function(df1,df2,cols){
+array1 <- c()
+i <- 1
+for(val in df1$userid){
+array1[i] <- (sum(df2[df2$userid.x==val,cols]))
+i <- i + 1
+}
+return(array1)
+}
+                                                                                                    
+i <- 1
+for(val in UniqueUser3$userid){
+                                                                                                          UniqueUser3$TotSessions[i] <- length(SessionStartEnd4$userid.x[SessionStartEnd4$userid.x==val])
+i <- i + 1
+}
+                                                                                                        UniqueUser3$SimulSessions <- SumSessions(UniqueUser3,SessionStartEnd4,"Simultaneous")
+                                                                                                        UniqueUser3$DupSessionid <- SumSessions(UniqueUser3,SessionStartEnd4,"DupSessionid")
+                                                                                                        UniqueUser3$TotTime <-  SumSessions(UniqueUser3,SessionStartEnd4,"duration")
+                                                                                                        
+                                                                                                        UniqueUser3$SimulRatio <- UniqueUser3$SimulSessions/UniqueUser3$TotSessions
+                                                                                                        UniqueUser3$DupSesRatio <- UniqueUser3$DupSessionid/UniqueUser3$TotSessions
+                                                                                                        
+                                                                                                        UniqueUser3$HighSimulUser <- UniqueUser3$SimulSessions > 20
+                                                                                                        
+                                                                                                        summary(UniqueUser3)
+                                                                                                        UniqueUser3[UniqueUser3$ProblemUser,]
+                                                                                                        
+                                                                                                        
+                                                                                                        
+```
+```{r}
+print("Total users by site")
+                                                                                                        table(UniqueUser3$defsite)
+print("Total users by job")
+                                                                                                        table(UniqueUser3$groupname)
+print("High simultaneous users by site")
+                                                                                                        table(UniqueUser3$defsite[UniqueUser3$HighSimulUser == TRUE])
+print("High simultaneous users by job")
+                                                                                                        table(UniqueUser3$groupname[UniqueUser3$HighSimulUser == TRUE])
+                                                                                                    
+                                                                                                      
+plot_bars = function(df, cat_cols){
+                                                                                                          options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+temp0 = df
+temp1 = df[df$HighSimulUser == 1,]
+                                                                                                        
+for(col in cat_cols){
+p1 = ggplot(temp0, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for all users')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p2 = ggplot(temp1, aes_string(col)) + 
+                                                                                                              geom_bar() +
+                                                                                                              ggtitle(paste('Bar plot of \n', col, '\n for users with a high number of simultaneous sessions')) +  
+                                                                                                              theme(axis.text.x = element_text(angle = 90, hjust = 1))
+                                                                                                            grid.arrange(p1,p2, nrow = 1)
+  }
+  }
+                                                                                                      
+cols <- c("defsite","groupname")
+                                                                                                      plot_bars(UniqueUser3,cols)
+                                                                                                    
+                                                                                                
+```
+From a quick glance at the charts, it appears that both LA and TX have a fair proportion of the users with too many simultaneous sessions.  But there are a few jobs that are overrepresented in users with too many simultaneous sessions.  These jobs appear to be storeroom clerk, scheduler, planner, and contract supervisor.
+                                                                                                        
+                                                                                                      
+```{r}
+Jobs <- data.frame(row.names = unique(UniqueUser3$groupname))
+for(val in 1:length(row.names(Jobs))){
+                                                                                                          Jobs$total[val] <- sum(as.numeric(UniqueUser3$groupname == row.names(Jobs)[val]))
+  }
+for(val in 1:length(row.names(Jobs))){
+                                                                                                          Jobs$HighSim[val] <- sum(as.numeric(UniqueUser3$groupname[UniqueUser3$HighSimulUser == TRUE] == row.names(Jobs)[val]))
+}
+Jobs$ratio <- round(Jobs$HighSim/Jobs$total,3)
+                                                                                                        head(Jobs[order(Jobs$ratio, decreasing = TRUE),],10)
+                                                                
+                                                                              
+```
+                                                                                                        
+                                                                                                        
+Here we can see the jobs that have the highest rates of simultaneous sessions.  Both of the 2 contractor planners were classified as having too many simultaneous sessions, for a rate of 100% of them.  75% of the 8 schedulers had too many simultaneous sessions.
+                                                                                                        
+### Part 2 (Research Methods)
+                                                                                                      
+1. Assume a null hypothesis of all access (both frequency and duration) being the same for TX and LA. Use the appropriate statistical methods in R to test this hypothesis and recommend a course of action to the business based on your results.
+                                                                                                        
+Since the distribution of login duration is very non-normal, I used chi-squared to obtain p values which show a significant difference in session duration between Texas and Louisiana.  They showed with extremely high confidence that Texas durations averaged 52 minutes, 9 minutes longer than Louisiana, 43 minutes.  This was surprising to me for several reasons.  For one, most sessions are well under 30 minutes, with the exception of duplicate and simultaneous sessions that tend to end at 120-121 minutes as discussed earlier.  I also analyzed the session durations by day, and observed that for 6 days out of the month, the Louisiana durations were actually longer than Texas durations.  Furthermore, the total average session duration varied from 39 minutes to 109 minutes based on the exact day of the month.  I performed a chi-squared test on each day of the month individually, and most of the results had p < 0.005 in spite of the glaring irregularities mentioned above.
+                                                                                                        
+                                                                                                        
+                                                                                                        
+```{r}
+                                                                                                        
+plot_bars = function(df, catcols){
+                                                                                                          options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+temp0 = df
+temp1 = df[df$defsite.x == 'TX',]
+temp2 = df[df$defsite.x == 'LA',]
+for(col in cat_cols){
+p1 = ggplot(temp0, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for all sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p2 = ggplot(temp1, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for TX sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p3 = ggplot(temp2, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for LA sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+grid.arrange(p1,p2,p3, nrow = 1)
+  }
+}
+                                                                  
+cat_cols = c('WeekDay', 'LoginHour', 'duration', 'attemptresult.y', 'groupname.x','type.x')
+                                                                                                        plot_bars(SessionStartEnd4, cat_cols) 
+                                                                            
+```
+                                                                                                        
+                                                                                                        
+```{r}
+                                                              
+TXLA <- data.frame(row.names = c("TX","LA"))
+                                                                                                        TXLA$AvgDuration <- c(mean(SessionStartEnd4$duration[SessionStartEnd4$defsite == 'TX']), mean(SessionStartEnd4$duration[SessionStartEnd4$defsite == 'LA']))
+TXLA$SdDuration <- c(sd(SessionStartEnd4$duration[SessionStartEnd4$defsite == 'TX']), sd(SessionStartEnd4$duration[SessionStartEnd4$defsite == 'LA']))
+                                                                                                        
+TXLA
+                                                                                                        
+                                                                                                        t.test(SessionStartEnd4$duration[SessionStartEnd4$defsite.x == 'TX'], SessionStartEnd4$duration[SessionStartEnd4$defsite.x == 'LA'])
+```
+```{r}
+                                                                                                        table(UniqueUser3$defsite)
+TXLA$Users <- c(length(UniqueUser3$defsite[UniqueUser3$defsite == 'TX']), length(UniqueUser3$defsite[UniqueUser3$defsite == 'LA']))
+                                                                                                        TXLA$SessionCount <- c(sum(UniqueUser3$TotSessions[UniqueUser3$defsite == 'TX']), sum(UniqueUser3$TotSessions[UniqueUser3$defsite == 'LA']))
+                                                                                                        TXLA$TimeLogged <- c(sum(UniqueUser3$TotTime[UniqueUser3$defsite == 'TX']), sum(UniqueUser3$TotTime[UniqueUser3$defsite == 'LA']))
+```
+                                                                                                      
+                                                                                                        
+                                                                            
+```{r}
+#rm(Calendar)
+                                                                                                  
+Calendar <- data.frame("day" = unique(day(SessionStartEnd4$attemptdate.x)))
+                                                                                                        Calendar$TotAvgDur <- 0
+                                                                                  
+Calendar <- Calendar[order(Calendar$day),]
+                                                                                                        
+for(val in 1:length(Calendar$day)){
+                                                                                                          Calendar$TotAvgDur[val] <- round(mean(SessionStartEnd4$duration[day(SessionStartEnd4$attemptdate.x) == val]),3)
+}
+                                                                          
+for(val in 1:length(Calendar$day)){
+                                                                                                          Calendar$TXAvgDur[val] <- round(mean(SessionStartEnd4$duration[day(SessionStartEnd4$attemptdate.x) == val & SessionStartEnd4$defsite.x == 'TX']),3)
+}
+                                                                                                      
+for(val in 1:length(Calendar$day)){
+                                                                                                          Calendar$LAAvgDur[val] <- round(mean(SessionStartEnd4$duration[day(SessionStartEnd4$attemptdate.x) == val & SessionStartEnd4$defsite.x == 'LA']),3)
+}
+                                                                                                        
+                                                                                                        Calendar$AvgTXLAdiff <- Calendar$LAAvgDur - Calendar$TXAvgDur
+                                                                                                        
+for(val in 1:length(Calendar$day)){
+                                                                                                          Calendar$TXSesCount[val] <- length(SessionStartEnd4$duration[day(SessionStartEnd4$attemptdate.x) == val & SessionStartEnd4$defsite.x == 'TX'])
+}
+                                                                                                      
+for(val in 1:length(Calendar$day)){
+                                                                                                          Calendar$LASesCount[val] <- length(SessionStartEnd4$duration[day(SessionStartEnd4$attemptdate.x) == val & SessionStartEnd4$defsite.x == 'LA'])
+}
+                                                                                                      
+```
+                                                                                                      
+Now we have our data frame with all the session duration and session count information we need.
+                                                                                                        
+```{r}
+TAB <- rbind(Calendar$TXAvgDur,Calendar$LAAvgDur)
+# Grouped
+                                                                                                        
+barplot(TAB, beside = TRUE, main = "Plot of average duration by day", xlab = "Day of Month", names = 1:31, legend.text = c("TX","LA"))
+```
+                                                                                                        
+                                                                                                      
+                                                                                                      
+```{r Chi squared}
+#first get the data into a form where the bins contain at least 5 values
+                                                                                                        
+SqRootTime <- data.frame("day" = day(SessionStartEnd4$attemptdate.x), "defsite" = SessionStartEnd4$defsite.x,"duration" = SessionStartEnd4$duration)
+SqRootTime$SQRT <- ceiling(sqrt(SqRootTime$duration))
+SqRootTime$QRT <- ceiling(sqrt(sqrt(SqRootTime$duration)))
+                                                                                                    
+SqRootTime <- SqRootTime[SqRootTime$defsite == 'TX' | SqRootTime$defsite == 'LA',]
+#SqRootTime <- SqRootTime[SqRootTime$SQRT < 26,]
+                                                                                                      
+TAB <- table(SqRootTime$defsite,SqRootTime$SQRT)
+#barplot(TAB, beside = TRUE)
+                                                                                                      
+chisq.test(TAB)
+                                                                                                      
+TAB <- table(SqRootTime$defsite,SqRootTime$QRT)
+                                                                                                        
+barplot(TAB, beside = TRUE, main = "Plot of duration by location", xlab = "Quartic root of duration in minutes", legend.text = unique(SqRootTime$defsite)[order(unique(SqRootTime$defsite))])
+                                                                                                        
+chisq.test(TAB)[3]
+# p value is <9.88e-58
+                                                                                                        
+# I want to highlight day 13, 14, and 15.  The total test statistic is about 357, but about half of that comes from day 13 - 15.  The squares of residuals for these days alone totals about 195.
+                                                                                                        chisq.test(TAB)[1:9]
+                                                                                                        wilcox.test(TAB[1,], TAB[2,])
+```
+                                                                            
+                                                                  
+```{r}
+TAB <- table(SqRootTime$defsite,SqRootTime$day)
+barplot(TAB, beside = TRUE, main = "Plot of session count by day", xlab = "Day of Month", names = 1:31, legend.text = unique(SqRootTime$defsite)[order(unique(SqRootTime$defsite))])
+                                                                                                      chisq.test(TAB)[1:3]
+wilcox.test(TAB[1,], TAB[2,])
+
+TAB[2,] <- 1.6*TAB[2,]
+  
+barplot(TAB, beside = TRUE, main = "Plot of session count by day", xlab = "Day of Month", names = 1:31, legend.text = unique(SqRootTime$defsite)[order(unique(SqRootTime$defsite))])
+        
+chisq.test(TAB)[1:3]
+wilcox.test(TAB[1,], TAB[2,])
+                                                                                                    
+```
+```{r}
+SqRootTime <- data.frame("day" = day(SessionStartEnd4$attemptdate.x), "defsite" = SessionStartEnd4$defsite.x,"duration" = SessionStartEnd4$duration)
+                                                                                                        SqRootTime$SQRT <- ceiling(sqrt(SqRootTime$duration))
+                                                                                                        SqRootTime$QRT <- ceiling(sqrt(sqrt(SqRootTime$duration)))
+                                                                                                        
+#SqRootTime <- SqRootTime[SqRootTime$defsite == 'TX' | SqRootTime$defsite == 'LA',]
+                                                                                            
+TAB <- table(SqRootTime$defsite,SqRootTime$SQRT)
+#barplot(TAB, beside = TRUE)
+                                                                                                        
+chisq.test(TAB)
+                                                                                                        
+TAB <- table(SqRootTime$defsite,SqRootTime$QRT)
+                                                                                                        
+barplot(TAB, beside = TRUE, main = "Plot of duration by location", xlab = "Quartic root of duration in minutes", legend.text =  unique(SqRootTime$defsite)[order(unique(SqRootTime$defsite))])
+                                                                                                        
+                                                                                                        chisq.test(TAB)[3]
+# p value is <9.88e-58
+                                                                                                        
+# I want to highlight day 13, 14, and 15.  The total test statistic is about 357, but about half of that comes from day 13 - 15.  The squares of residuals for these days alone totals about 195.
+                                                                                                        chisq.test(TAB)[1:9]
+                                                                                                        wilcox.test(TAB[1,], TAB[2,])
+                                                                                                        
+```
+                                                                                                        
+                                                                                                      
+```{r}
+TAB <- table(SqRootTime$defsite,SqRootTime$day)
+barplot(TAB, beside = TRUE, main = "Plot of session count by day", xlab = "Day of Month", names = 1:31, legend.text = unique(SqRootTime$defsite)[order(unique(SqRootTime$defsite))])
+                                                                                                        chisq.test(TAB)[1:9]
+                                                                                                        wilcox.test(TAB[1,], TAB[2,])
+```
+                                                                                                      
+By adding the pipeline data, the chi-squared p-value increased dramatically, while the Wilcoxon-Mann-Whitney p-value decreased dramatically.  This is what would be expected, because the chi-squared test is not sensitive to scale while WMW is.  A chi-squared test would see 1,2,3,2,1 and 2,4,6,4,2 as equal because scaling is part of its procedure.  WMW would see those two as different.  The difference seen by WMW would be even more pronounced comparing one of those samples to a sample of 100,200,300,200,100, while chi-squared would see all 3 as the same.
+                                                                                                        
+                                                                                                        We could go to great lengths to find a significance test that would give us a number we would like.  But I believe the most useful tool in an analysis like this is the simple barplot.  Most weekday data is exactly what we would expect, with a roughly 60/40 split of sessions between Tx and LA.  Weekends have a few more anomalies.
+                                                                                                        
+                                                                                                        
+```{r}
+PredTAB <- TAB
+PredTAB <- rbind(PredTAB,PredTAB[1,]+PredTAB[2,])
+PredTAB <- cbind(PredTAB,c(sum(PredTAB[1,]),sum(PredTAB[2,]),sum(PredTAB[3,])))
+                                                                                                      
+for(i in 1:2){
+for(j in 1:7){
+  PredTAB[i,j] <- PredTAB[3,j]*PredTAB[i,8]/PredTAB[3,8]
+  }
+}
+                                                                                                      
+DifTAB <- PredTAB
+for(i in 1:2){
+for(j in 1:7){
+  DifTAB[i,j] <- (TAB[i,j]-PredTAB[i,j])**2/PredTAB[i,j]
+  }
+}
+                                                                                                      
+DifTAB
+                                                                                                        sum(DifTAB[1:2,1:6])
+                                                                                                        
+                                                                                                        
+                                                                                                        
+                                                                                                        
+```
+                                                                                      
+for(val in 1:length(SqRootTime$defsite)){
+                                                                                                          if(SqRootTime$defsite[val] == 'LA'){
+                                                                                                            SqRootTime$SQRT[val] <- ceiling(UserRatio*sqrt(SqRootTime$duration[val]))
+                } 
+  }
+                                                                                                      
+TAB <- table(SqRootTime$defsite,SqRootTime$SQRT)
+barplot(TAB, beside = TRUE)
+                                                                                                        
+                                                                                                        chisq.test(TAB)[1:9]
+                                                                                                      
+TAB <-rbind(Calendar$TXSesCount,Calendar$LASesCount)
+                                                                                                        
+```{r}
+                                                                                                        
+SqRootTime <- data.frame("defsite" = SessionStartEnd4$defsite.x,"duration" = SessionStartEnd4$duration, "day" = day(SessionStartEnd4$attemptdate.x))
+SqRootTime$SQRT <- ceiling(sqrt(SqRootTime$duration))
+SqRootTime$QRT <- ceiling(sqrt(sqrt(SqRootTime$duration)))
+SqRootTime <- SqRootTime[SqRootTime$defsite == 'TX' | SqRootTime$defsite == 'LA',]
+                                                                                                
+for(val in Calendar$day){
+TAB <- table(SqRootTime$defsite[SqRootTime$day == val],SqRootTime$QRT[SqRootTime$day == val])
+  print(val)
+print(TAB)
+                                                                                                          print(chisq.test(TAB)[3])
+barplot(TAB, beside = TRUE)
+Calendar$DurChi2pval[val] <- round(as.numeric(chisq.test(TAB)[3]),4)
+}
+                                                                                                        
+TAB <- table(SqRootTime$defsite[SqRootTime$day == 1],SqRootTime$SQRT[SqRootTime$day == 1])
+                                                                                                        Calendar$Chi2[val] <- chisq.test(TAB)[3]
+                                                                                                        
+```
+                                                                                                        
+                                                                                                        
+                                                                                        
+```{r}
+                                                                                                        ggplot(data=SessionStartEnd4, aes(x=defsite.x, y=duration, fill=defsite.x))+
+                                                                                                          geom_boxplot(alpha=.20, color="black")+
+                                                                                                          #geom_jitter(alpha=.5, color="black", fill="grey90", width=.20)+
+                                                                                                          theme_light()+
+                                                                                                          scale_y_continuous(name="Duration")+
+                                                                                                          scale_x_discrete(name="Defsite")+
+                                                                                                          scale_fill_discrete(name="Site")
+```
+                                                                                                        
+  ```{r}
+#generate id variable for each subject as a factor variable
+dat$idvar <- as.factor(1:nrow())
+                                                                                                        
+ezANOVA(data=dat, 
+wid=.(idvar), 
+dv=.(sentiment), 
+between=.(defsite.x, duration),
+type=3)
+```
+                                                                                                        
+                                                                                                        
+                                                                                                        
+                                                                                                        
+                                                                             
+On Sunday morning between 05:00 and 08:00 Louisiana has a great deal of IT analyst logins while Texas has very few.  On Saturday between about 08:00 and 13:00, Texas has a great deal of logins and Louisiana has none.  Let's see if this is true for every week of the month of March.  According to the code below, all but 3 the roughly 30 Sunday logins were from the first Sunday of the month, while all the Saturday logins were from the last Saturday of the month.
+
+TX IT analysts logged in on March 14th and 28th, but on no other Saturdays.
+
+There is no weekly consistency in weekend logins.  LA IT analysts occasionally login on Sunday mornings, including March 1st and March 29th, but no Sundays inbetween.    
+
+
+
+
+```{r IT analyst usage}
+print("Table of IT Analyst off-hours sessions, 6PM to 8AM")
+table(SessionStartEnd4$SixPMto8AM[SessionStartEnd4$groupname.x == "IT ANALYST"])
+
+```
+
+
+3. Come up with your own question that involves principles of data science research and is relevant to the business. Write it out, explain your rationale, and solve.  
+
+
+
+
+
+Which users tend to have simultaneous sessions, wasting licenses?
+
+How many duplicated and simultaneous sessions do we have over time, and how much risk do they pose of exceeding the threshold of 90 limited and authorized users at one time?  Which users give us the most simultaneous sessions, and what use patterns do they show over time?
+
+We can see a significant number of simultaneous sessions, 6460 out of 27674.  Let's look at the properties of unique, simultaneous, and duplicated sessions by other variables.  Maybe some patterns will stand out.
+                                                                                                        
+```{r}
+                                                                          
+plot_bars = function(df, catcols){
+                                                                                                        options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+temp0 = df
+temp1 = df[df$Simultaneous == 1,]
+temp2 = df[df$DupSessionid == 1,]
+for(col in cat_cols){
+p1 = ggplot(temp0, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for all sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p2 = ggplot(temp1, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for simultaneous sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p3 = ggplot(temp2, aes_string(col)) + 
+geom_bar() +
+ggtitle(paste('Bar plot of \n', col, '\n for duplicated sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+grid.arrange(p1,p2,p3, nrow = 1)
+  }
+}
+                                                                                                      
+                                                                                                        
+cat_cols = c('WeekDay', 'LoginHour', 'duration', 'attemptresult.y', 'groupname.x','defsite.x','type.x')
+plot_bars(SessionStartEnd4, cat_cols) 
+                                                                                                        
+                                                                                                        
+```
+                                                                                                        
+1. Simultaneous and duplicated sessions make up a higher proportion of sessions on weekends.
+2. Simultanoues and duplicated sessions make up a higher proportion of sessions from about 5pm to 5am
+3. The duration of normal sessions is low, but simultaneous and duplicated sessions have a peak at 120-121 minutes, as demonstrated below
+4. Syslogouts make up a small minority of unique session logouts, a high proportion of simultanous session logouts, and an overwhelming majority of duplicate session logouts.  Normal logouts and timeouts are somewhat balanced with each other in all 3 types of sessions.
+5. Schedulers have more than their fair share of simultaneous sessions when compared to their total sessions.  But in general there are no major differences in the proportion of simultaneous or duplicated sessions by job type.
+6. There is not a major difference in the proportion of simultaneous or duplicated sessions by job site.
+7. There is not a major difference in the proportion of simultaneous or duplicated sessions by user type (authorized, express, or limited)
+                                              
+Below, we can see that the simultaneous and duplicated sessions tend to be 120-121 minutes long, while normal sessions are much shorter on average.  Curiously, unique sessions also have a local maximum at 120-122 minutes
+                                                                                                        
+```{r metrics}
+cat("Total sessions\n")
+table(SessionStartEnd4[SessionStartEnd4$duration < 153,"duration"])
+                                                                                                        
+cat("\nDuplicate Sessions peak at 120-121 minutes\n")
+table(SessionStartEnd4[SessionStartEnd4$duration < 200 & SessionStartEnd4$DupSessionid == 1,"duration"])
+# The DupSessionid duration peaks at 120-121 minutes
+                                                                                                        
+cat("\nSimultaneous Sessions also have a local maximum at 120-121 minutes\n")
+table(SessionStartEnd4[SessionStartEnd4$duration < 200 & SessionStartEnd4$Simultaneous == 1,"duration"])
+                                                                                                      
+                                                                                                        
+```
+                                                                                                        
+```{r}
+options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+temp0 = SessionStartEnd4[SessionStartEnd4$attemptresult.y == "LOGOUT",]
+temp1 = SessionStartEnd4[SessionStartEnd4$attemptresult.y == "SYSLOGOUT",]
+temp2 = SessionStartEnd4[SessionStartEnd4$attemptresult.y == "TIMEOUT",]
+                                                                                                        
+p1 = ggplot(temp0, aes_string("duration")) + 
+  geom_bar() +
+ggtitle(paste('Bar plot of \n', "duration", '\n for LOGOUT sessions')) +  
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p2 = ggplot(temp1, aes_string("duration")) + 
+  geom_bar() +
+  ggtitle(paste('Bar plot of \n', "duration", '\n for SYSLOGOUT sessions')) +  
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p3 = ggplot(temp2, aes_string("duration")) + 
+  geom_bar() +
+  ggtitle(paste('Bar plot of \n', "duration", '\n for TIMEOUT sessions')) +  
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+grid.arrange(p1,p2,p3, nrow = 1)
+                                                                                                        
+```
+                                                                                                        
+Let's just see who are the users with the most simultaneous sessions and duplicate sessions.  Maybe we can find some commonalities or at least send them a notification individually.
+
+
+```{r}
+UniqueUser3 <- UniqueUser2
+
+SumSessions <- function(df1,df2,cols){
+  array1 <- c()
+  i <- 1
+  for(val in df1$userid){
+    array1[i] <- (sum(df2[df2$userid.x==val,cols]))
+    i <- i + 1
+  }
+  return(array1)
+}
+
+i <- 1
+for(val in UniqueUser3$userid){
+  UniqueUser3$TotSessions[i] <- length(SessionStartEnd4$userid.x[SessionStartEnd4$userid.x==val])
+  i <- i + 1
+}
+UniqueUser3$SimulSessions <- SumSessions(UniqueUser3,SessionStartEnd4,"Simultaneous")
+UniqueUser3$DupSessionid <- SumSessions(UniqueUser3,SessionStartEnd4,"DupSessionid")
+UniqueUser3$TotTime <-  SumSessions(UniqueUser3,SessionStartEnd4,"duration")
+
+UniqueUser3$SimulRatio <- UniqueUser3$SimulSessions/UniqueUser3$TotSessions
+UniqueUser3$DupSesRatio <- UniqueUser3$DupSessionid/UniqueUser3$TotSessions
+
+UniqueUser3$HighSimulUser <- UniqueUser3$SimulSessions > 20
+
+summary(UniqueUser3)
+UniqueUser3[UniqueUser3$ProblemUser,]
+
+
+
+```
+Let's get the most important information, which is how many users are threatening to exceed our licenses.
+
+```{r}
+SessionLog <- data.frame(datetime <- seq.POSIXt(as_datetime(min(SessionStartEnd4$attemptdate.x)), as_datetime(max(SessionStartEnd4$attemptdate.y)), by="min"))
+colnames(SessionLog) <- "datetime"
+
+
+AddCol <- function(df1, j12, df2, j21, i1, cond){
+  result <- c()
+  for(val in 1:length(df2[,j21])){
+    result[val] <- length(df1[df1[,j12] == df2[val,j21] & df1[,i1] == cond,j12])
+  }
+  print(result[1100:1200])
+  return(result)
+  
+}
+```
+
+
+```{r}
+SessionLog <- data.frame(datetime <- seq.POSIXt(as_datetime(min(SessionStartEnd4$attemptdate.x)), as_datetime(max(SessionStartEnd4$attemptdate.y)), by="min"))
+colnames(SessionLog) <- "datetime"
+
+
+AddCol <- function(vec1, vec2){
+  result <- c()
+  for(val in 1:length(vec2)){
+    result[val] <- length(vec1[vec1 == vec2[val]])
+  }
+  #  print(result[1100:1200])
+  return(result)
+  
+}
+```
+
+length(SessionStartEnd4[SessionStartEnd4[,"attemptdate.x"] == SessionLog[1,"datetime"] & SessionStartEnd4[,"attemptresult.x"] == "LOGIN","attemptdate.x"]) && SessionStartEnd4[attemptresult.x,] == "LOGIN"
+
+```{r}
+
+SessionLog$TotLogin <- AddCol(SessionStartEnd4$attemptdate.x, SessionLog$datetime)
+```
+
+
+```{r}
+SessionLog$TotLogout <- AddCol(SessionStartEnd4$attemptdate.y, SessionLog$datetime)
+```
+
+```{r}
+SumUsers <- function(df, j1, j2){
+  result <- rep(0,length(df[,"datetime"]))
+  for(val in 2:length(df[,"datetime"])-1){
+    result[val+1] <- result[val] + df[val,j1] - df[val,j2]
+  }
+  return(result)
+}
+```
+
+j1 <- "TotLogin"
+result <- rep(0,length(SessionLog[,"datetime"]))
+for(val in 2:length(SessionLog[,"datetime"])-1){
+  result[val+1] <- result[val] + SessionLog[val,j1] - SessionLog[val,"TotLogout"]
+}
+
+```{r}
+SessionLog$TotUsers <- SumUsers(SessionLog, "TotLogin", "TotLogout")
+min(SessionLog$TotUsers)
+max(SessionLog$TotUsers)
+```
+
+
+```{r}
+#SessionLog$TotUsers <- 0
+#for(val in 2:length(SessionLog$datetime)-1){
+#  SessionLog$TotUsers[val+1] <- SessionLog$TotUsers[val] + SessionLog$TotLogin[val] - SessionLog$TotLogout[val]
+#}
+#SessionLog[1:20,"TotLogin"]
+#SessionLog[1:20,"datetime"]
+```
+
+
+```{r}
+ggplot(SessionLog, aes(x = datetime)) +
+  #geom_point(alpha = 0.2, color = "red") +
+  geom_segment(aes(x = min(datetime), y = 90, xend = max(datetime), yend = 90, color = "red")) +
+  geom_line(aes(y = TotUsers), color="black")  #+
+#geom_line(aes(y = DupUsers), color="steelblue")
+
+```
+
+```{r}
+SessionLog$AuthLimLogin <- AddCol(SessionStartEnd4$attemptdate.x[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED")], SessionLog$datetime)
+```
+
+
+```{r}
+SessionLog$AuthLimLogout <- AddCol(SessionStartEnd4$attemptdate.y[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED")], SessionLog$datetime)
+```
+
+```{r}
+SessionLog$AuthLimUsers <- SumUsers(SessionLog, "AuthLimLogin", "AuthLimLogout")
+min(SessionLog$AuthLimUsers)
+max(SessionLog$AuthLimUsers)
+```
+It's nice to see that authorized and limited put together only reach 99, but this is over the limit of 90.  We can delete the duplicate sessions and probably justify it to Maximo, but it is not possible to delete the simultaneous sessions because it's harder to justify it to Maximo.
+
+```{r}
+SessionLog$ALDupLogin <- AddCol(SessionStartEnd4$attemptdate.x[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED") & SessionStartEnd4$DupSessionid == 1], SessionLog$datetime)
+```
+
+
+```{r}
+SessionLog$ALDupLogout <- AddCol(SessionStartEnd4$attemptdate.y[SessionStartEnd4$type.x %in% c("LIMITED","AUTHORIZED") & SessionStartEnd4$DupSessionid == 1], SessionLog$datetime)
+```
+
+```{r}
+SessionLog$ALDupUsers <- SumUsers(SessionLog, "ALDupLogin", "ALDupLogout")
+min(SessionLog$ALDupUsers)
+max(SessionLog$ALDupUsers)
+```
+```{r}
+SessionLog$ALUniqueUsers <- SessionLog$AuthLimUsers - SessionLog$ALDupUsers
+min(SessionLog$ALUniqueUsers)
+max(SessionLog$ALUniqueUsers)
+```
+A maximum of 34 duplicate users is higher than I expected.  Removing them all brings our maximum user load down from 99 to 91 users, but it is still exceeding the limit of 90.  Therefore it is very important to encourage employees to logout and reduce their individual load on the system.
+
+```{r}
+ggplot(SessionLog, aes(x = datetime)) +
+  #geom_point(alpha = 0.2, color = "red") +
+  geom_segment(aes(x = min(datetime), y = 90, xend = max(datetime), yend = 90, color = "red")) +
+  geom_line(aes(y = ALUniqueUsers), color="black") +
+  geom_line(aes(y = ALDupUsers), color="steelblue")
+
+```
+From the timelines, we can see that we exceeded 90 users on the first Tuesday of the month, and this is the case even when we find and eliminate duplicate sessions.  This makes it important for the company to reduce simultaneous sessions.  We know from the following table that 8.24% of total sessions are duplicates but 23.3% are users with simultaneous sessions.  
+
+It is encouraging that in the last 2.5 weeks of the month, user count never exeeded about 65.
+
+```{r}
+length(SessionStartEnd4$DupSessionid[SessionStartEnd4$DupSessionid == 1])/length(SessionStartEnd4$DupSessionid)
+length(SessionStartEnd4$Simultaneous[SessionStartEnd4$Simultaneous == 1])/length(SessionStartEnd4$Simultaneous)
+```
+It's hard to know without further investigation exactly to what extent those sessions overlap.  All duplicate sessions are also simultaneous sessions, so if we remove them and rerun the code, we will get far fewer simultaneous sessions.  But it will definitely still be something we want to eliminate since we are so close to exceeding the threshold of 90 user licenses.
+
+```{r}
+SessionStartEnd4$Simultaneous2 <- 0
+
+for(val in 2:(length(SessionStartEnd4$attemptdate.x))){
+  if(difftime(SessionStartEnd4$attemptdate.y[val-1],SessionStartEnd4$attemptdate.x[val])>0 & 
+      SessionStartEnd4$DupSessionid[val-1] == 0 & 
+      SessionStartEnd4$DupSessionid[val] == 0){
+    SessionStartEnd4$Simultaneous2[val] <- 1
+  }
+}
+length(SessionStartEnd4$DupSessionid[SessionStartEnd4$DupSessionid == 1])/length(SessionStartEnd4$DupSessionid)
+length(SessionStartEnd4$Simultaneous[SessionStartEnd4$Simultaneous == 1])/length(SessionStartEnd4$Simultaneous)
+length(SessionStartEnd4$Simultaneous2[SessionStartEnd4$Simultaneous2 == 1])/length(SessionStartEnd4$Simultaneous2)
+```
+
+This means that the simultaneous sessions after eliminating duplicate sessions are 11.4% of the total sessions.  It is not as bad as 23%, but still not very good.  Assuming only half of their total time overlaps on average, these sessions probably contribute to at least 5% of our user load.  Eliminating them would free up about 5 users and make us significantly less likely to reach the limit of 90 user licenses.
+
+
+
+
+```{r}
+
+cat("Total users by site:")
+table(UniqueUser3$defsite)
+cat("\nTotal users by job:")
+table(UniqueUser3$groupname)
+cat("\nHigh simultaneous users by site:")
+table(UniqueUser3$defsite[UniqueUser3$HighSimulUser == TRUE])
+cat("\nHigh simultaneous users by job:")
+table(UniqueUser3$groupname[UniqueUser3$HighSimulUser == TRUE])
+```
+From this we can see that 50 users from LA and 31 from TX have a high number of simultaneous sessions, including duplicate sessions.
+
+```{r}
+plot_bars = function(df, cat_cols){
+  options(repr.plot.width=6, repr.plot.height=5) # Set the initial plot area dimensions
+  temp0 = df
+  temp1 = df[df$HighSimulUser == 1,]
+
+  for(col in cat_cols){
+    p1 = ggplot(temp0, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for all users')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    p2 = ggplot(temp1, aes_string(col)) + 
+      geom_bar() +
+      ggtitle(paste('Bar plot of \n', col, '\n for users with a high number of simultaneous sessions')) +  
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    grid.arrange(p1,p2, nrow = 1)
+  }
+}
+
+cols <- c("defsite","groupname")
+plot_bars(UniqueUser3,cols)
+
+
+```
+From a quick glance at the charts, it appears that both LA and TX have a fair proportion of the users with too many simultaneous sessions.  But there are a few jobs that are overrepresented in users with too many simultaneous sessions.  These jobs appear to be storeroom clerk, scheduler, planner, and contract supervisor.
+
+
+```{r}
+Jobs <- data.frame(row.names = unique(UniqueUser3$groupname))
+for(val in 1:length(row.names(Jobs))){
+  Jobs$total[val] <- sum(as.numeric(UniqueUser3$groupname == row.names(Jobs)[val]))
+}
+for(val in 1:length(row.names(Jobs))){
+  Jobs$HighSim[val] <- sum(as.numeric(UniqueUser3$groupname[UniqueUser3$HighSimulUser == TRUE] == row.names(Jobs)[val]))
+}
+Jobs$ratio <- round(Jobs$HighSim/Jobs$total,3)
+head(Jobs[order(Jobs$ratio, decreasing = TRUE),],10)
+
+
+```
+
+
+Here we can see the jobs that have the highest rates of simultaneous sessions.  Both of the 2 contractor planners were classified as having too many simultaneous sessions, for a rate of 100% of them.  75% of the 8 schedulers had too many simultaneous sessions.
+
+
+
+
+Let's see if we can predict anything about user logins or durations in the 4th week of March given the data from the first 3 weeks of March.
+
+
+
+
+
+### Part 3 (Reflection)
+
+I was looking forward to using TensorFlow as a neural network.  I had a very hard time setting it up 5 months ago, but it worked far better than nnet or neuralnet, both in terms of speed and accuracy.  Unfortunately it proved to be even more difficult to set up today, and I could not make it work either in RStudio or in Jupyter after attacking the problem from countless different angles.  It took so many hours, I concluded it might not work at all and it would be better to cut bait and move on.
+
+1. How has your comfort level changed now that you are coming off Project 2 and have the same data to work with?
+  
+  I have gotten a lot faster at coding and thinking about different ways to view the data.  Speed and comfort are the biggest improvement, and these will be important in job searching.
+
+2. Do you see any similarities between the Machine Learning and Research Methods pieces here?
+  
+  
+  
+  3. Did you take advantage of the student worksessions? How did those help?
+  
+  4. What was your biggest growth point, or obstacle you overcame, in the course of this project?
+  
+  ### Submissions
+  
+  Because we all will be working with the same data, you will only need to send me your new Markdown file. Please save it as *lastname_firstinitial_Project3.Rmd* and email to me directly at [jonathan.fowler@quickstart.com](mailto:jonathan.fowler@quickstart.com). Submissions must be made by **June 19 2020 11:59PM ET**. 
+
+### Resources 
+
+#### Machine Learning
+<https://github.com/twitter/AnomalyDetection> <br>
+  <https://towardsdatascience.com/tidy-anomaly-detection-using-r-82a0c776d523?gi=e8aa74571226> <br>
+  <https://www.datacamp.com/community/tutorials/detect-anomalies-anomalize-r> <br>
+  
+  #### Research Methods
+  Many basic functions of statistical analysis are in the R package "psych" found at <https://personality-project.org/r/index.html>
+  
+  #### R Markdown
+  For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
